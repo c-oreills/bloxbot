@@ -22,28 +22,34 @@ keypoints1, descriptors1 = orb.detectAndCompute(img1, None)
 keypoints2, descriptors2 = orb.detectAndCompute(img2, None)
 
 
-x = np.array([keypoints2[0].pt])
+def create_meanshift(keypoints):
+    x = np.array([keypoints[0].pt])
 
-for i in range(len(keypoints2)):
-    x = np.append(x, [keypoints2[i].pt], axis=0)
+    for i in range(len(keypoints)):
+        x = np.append(x, [keypoints[i].pt], axis=0)
 
-x = x[1:len(x)]
+    x = x[1:len(x)]
 
-bandwidth = estimate_bandwidth(x, quantile=0.1, n_samples=500)
+    bandwidth = estimate_bandwidth(x, quantile=0.1, n_samples=500)
 
-ms = MeanShift(bandwidth=bandwidth, bin_seeding=True, cluster_all=True)
-ms.fit(x)
-labels = ms.labels_
-cluster_centers = ms.cluster_centers_
+    ms = MeanShift(bandwidth=bandwidth, bin_seeding=True, cluster_all=True)
+    ms.fit(x)
+    return ms
 
+
+meanshift = create_meanshift(keypoints2)
+
+# TODO unused, look up
+# cluster_centers = ms.cluster_centers_
+
+labels = meanshift.labels_
 labels_unique = np.unique(labels)
 n_clusters_ = len(labels_unique)
 print("number of estimated clusters : %d" % n_clusters_)
 
 s = [None] * n_clusters_
 for i in range(n_clusters_):
-    l = ms.labels_
-    d, = np.where(l == i)
+    d, = np.where(meanshift.labels_ == i)
     print(d.__len__())
     s[i] = list(keypoints2[xx] for xx in d)
 
@@ -52,8 +58,7 @@ des2_ = descriptors2
 for i in range(n_clusters_):
 
     keypoints2 = s[i]
-    l = ms.labels_
-    d, = np.where(l == i)
+    d, = np.where(meanshift.labels_ == i)
     descriptors2 = des2_[d, ]
 
     FLANN_INDEX_KDTREE = 0
