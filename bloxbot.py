@@ -12,6 +12,8 @@ import numpy as np
 from sklearn.cluster import MeanShift, estimate_bandwidth
 
 MIN_MATCH_COUNT = 10
+LOWE_MATCH_RATIO = 0.7
+
 img1 = cv.imread('sburg.png',0)          # queryImage
 img2 = cv.imread('testimgs/1.png',0) # trainImage
 
@@ -37,9 +39,9 @@ def create_meanshift(keypoints):
     return ms
 
 
-def plot_matches(good, keypoints1, keypoints2):
-    src_pts = np.float32([keypoints1[m.queryIdx].pt for m in good]).reshape(-1,1,2)
-    dst_pts = np.float32([keypoints2[m.trainIdx].pt for m in good]).reshape(-1,1,2)
+def plot_matches(good_matches, keypoints1, keypoints2):
+    src_pts = np.float32([keypoints1[m.queryIdx].pt for m in good_matches]).reshape(-1,1,2)
+    dst_pts = np.float32([keypoints2[m.trainIdx].pt for m in good_matches]).reshape(-1,1,2)
 
     M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 2)
 
@@ -59,7 +61,7 @@ def plot_matches(good, keypoints1, keypoints2):
                             matchesMask=matchesMask,  # draw only inliers
                             flags=2)
 
-        img3 = cv.drawMatches(img1, keypoints1, img2_poly, keypoints2, good, None, **draw_params)
+        img3 = cv.drawMatches(img1, keypoints1, img2_poly, keypoints2, good_matches, None, **draw_params)
 
         plt.imshow(img3, 'gray'), plt.show()
 
@@ -99,15 +101,12 @@ for i in range(n_clusters_):
 
     matches = flann.knnMatch(descriptors1, descriptors2, 2)
 
-    # store all the good matches as per Lowe's ratio test.
-    good = []
-    for m,n in matches:
-        if m.distance < 0.7*n.distance:
-            good.append(m)
+    # store all the good_matches matches as per Lowe's ratio test.
+    good_matches = [m for (m, n) in matches if m.distance < LOWE_MATCH_RATIO * n.distance]
 
-    if len(good)>3:
-        plot_matches(good, keypoints1, keypoints2)
+    if len(good_matches) > MIN_MATCH_COUNT:
+        plot_matches(good_matches, keypoints1, keypoints2)
     else:
-        print ("Not enough matches are found - %d/%d" % (len(good),MIN_MATCH_COUNT))
+        print ("Not enough matches are found - %d/%d" % (len(good_matches),MIN_MATCH_COUNT))
         matchesMask = None
 
