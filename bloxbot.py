@@ -57,29 +57,34 @@ def plot_matches(good_matches, query, train_keypoints):
 
     if M is None:
         print("No Homography")
-    else:
-        matchesMask = mask.ravel().tolist()
+        return
 
-        h, w = query['image'].shape
-        pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1],
-                          [w - 1, 0]]).reshape(-1, 1, 2)
-        dst = cv.perspectiveTransform(pts, M)
+    matchesMask = mask.ravel().tolist()
 
-        img2_poly = cv.polylines(img2, [np.int32(dst)], True, 255, 3,
-                                 cv.LINE_AA)
+    h, w = query['image'].shape
+    pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1],
+                      [w - 1, 0]]).reshape(-1, 1, 2)
+    dst = cv.perspectiveTransform(pts, M)
 
-        draw_params = dict(
-            matchColor=(0, 255, 0),  # draw matches in green color
-            singlePointColor=None,
-            matchesMask=matchesMask,  # draw only inliers
-            flags=2)
+    img2_poly = cv.polylines(img2, [np.int32(dst)], True, 255, 3, cv.LINE_AA)
 
-        img3 = cv.drawMatches(query['image'], query['keypoints'], img2_poly,
-                              train_keypoints, good_matches, None,
-                              **draw_params)
+    draw_params = dict(
+        matchColor=(0, 255, 0),  # draw matches in green color
+        singlePointColor=None,
+        matchesMask=matchesMask,  # draw only inliers
+        flags=2)
 
-        print(f'Match for {query["name"]}: {len(good_matches)}/{MIN_MATCH_COUNT}')
-        # plt.imshow(img3, 'gray'), plt.show()
+    print(
+        f'Match for {query["name"]} at (): {len(good_matches)}/{MIN_MATCH_COUNT}'
+    )
+
+    draw = False
+    if not draw:
+        return
+
+    img3 = cv.drawMatches(query['image'], query['keypoints'], img2_poly,
+                          train_keypoints, good_matches, None, **draw_params)
+    plt.imshow(img3, 'gray'), plt.show()
 
 
 def find_features_in_train_image(train_image):
