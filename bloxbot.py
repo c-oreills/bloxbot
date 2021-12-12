@@ -6,9 +6,10 @@
 
 
 import pyscreenshot as ImageGrab
-import numpy as np
 import cv2 as cv
 from matplotlib import pyplot as plt
+import numpy as np
+from sklearn.cluster import MeanShift, estimate_bandwidth
 
 MIN_MATCH_COUNT = 10
 img1 = cv.imread('sburg.png',0)          # queryImage
@@ -20,8 +21,6 @@ orb = cv.ORB_create(10000, 1.2, nlevels=8, edgeThreshold = 5)
 keypoints1, descriptors1 = orb.detectAndCompute(img1, None)
 keypoints2, descriptors2 = orb.detectAndCompute(img2, None)
 
-import numpy as np
-from sklearn.cluster import MeanShift, estimate_bandwidth
 
 x = np.array([keypoints2[0].pt])
 
