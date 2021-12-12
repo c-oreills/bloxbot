@@ -8,6 +8,7 @@ opencv-python = "*"
 pillow = "*"
 pyscreenshot = "*"
 matplotlib = "*"
+sklearn = "*"
 
 [requires]
 python_version = "3.9"
