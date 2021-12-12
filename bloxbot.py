@@ -74,8 +74,9 @@ def plot_matches(good_matches, query, train_keypoints):
         matchesMask=matchesMask,  # draw only inliers
         flags=2)
 
+    centre_pt = np.average(dst_pts, axis=0)
     print(
-        f'Match for {query["name"]} at (): {len(good_matches)}/{MIN_MATCH_COUNT}'
+        f'Match at {centre_pt}: {len(good_matches)}/{MIN_MATCH_COUNT}'
     )
 
     draw = False
@@ -108,7 +109,8 @@ def find_features_in_train_image(train_image):
 
     des2_ = train_descriptors
 
-    for _, query in QUERIES.items():
+    for query_name, query in QUERIES.items():
+        print(f'# {query_name}')
         for i in range(n_clusters_):
 
             train_keypoints = s[i]
@@ -135,9 +137,10 @@ def find_features_in_train_image(train_image):
             if len(good_matches) > MIN_MATCH_COUNT:
                 plot_matches(good_matches, query, train_keypoints)
             else:
-                print("Not enough matches are found - %d/%d" %
+                print("Not enough matches: %d/%d" %
                       (len(good_matches), MIN_MATCH_COUNT))
                 matchesMask = None
+        print()
 
 
 find_features_in_train_image(img2)
