@@ -5,10 +5,10 @@
 # https://stackoverflow.com/questions/42938149/opencv-feature-matching-multiple-objects
 
 
-import pyscreenshot as ImageGrab
-import cv2 as cv
+import cv
 from matplotlib import pyplot as plt
 import numpy as np
+import pyscreenshot as ImageGrab
 from sklearn.cluster import MeanShift, estimate_bandwidth
 
 MIN_MATCH_COUNT = 10
