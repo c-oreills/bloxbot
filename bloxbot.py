@@ -37,6 +37,33 @@ def create_meanshift(keypoints):
     return ms
 
 
+def plot_matches(good, keypoints1, keypoints2):
+    src_pts = np.float32([keypoints1[m.queryIdx].pt for m in good]).reshape(-1,1,2)
+    dst_pts = np.float32([keypoints2[m.trainIdx].pt for m in good]).reshape(-1,1,2)
+
+    M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 2)
+
+    if M is None:
+        print ("No Homography")
+    else:
+        matchesMask = mask.ravel().tolist()
+
+        h, w = img1.shape
+        pts = np.float32([[0,0],[0,h-1],[w-1,h-1],[w-1,0]]).reshape(-1,1,2)
+        dst = cv.perspectiveTransform(pts,M)
+
+        img2_poly = cv.polylines(img2,[np.int32(dst)],True,255,3, cv.LINE_AA)
+
+        draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
+                            singlePointColor=None,
+                            matchesMask=matchesMask,  # draw only inliers
+                            flags=2)
+
+        img3 = cv.drawMatches(img1, keypoints1, img2_poly, keypoints2, good, None, **draw_params)
+
+        plt.imshow(img3, 'gray'), plt.show()
+
+
 meanshift = create_meanshift(keypoints2)
 
 # TODO unused, look up
@@ -79,31 +106,8 @@ for i in range(n_clusters_):
             good.append(m)
 
     if len(good)>3:
-        src_pts = np.float32([ keypoints1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
-        dst_pts = np.float32([ keypoints2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
-
-        M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 2)
-
-        if M is None:
-            print ("No Homography")
-        else:
-            matchesMask = mask.ravel().tolist()
-
-            h,w = img1.shape
-            pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-            dst = cv.perspectiveTransform(pts,M)
-
-            img2 = cv.polylines(img2,[np.int32(dst)],True,255,3, cv.LINE_AA)
-
-            draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
-                               singlePointColor=None,
-                               matchesMask=matchesMask,  # draw only inliers
-                               flags=2)
-
-            img3 = cv.drawMatches(img1, keypoints1, img2, keypoints2, good, None, **draw_params)
-
-            plt.imshow(img3, 'gray'), plt.show()
-
+        plot_matches(good, keypoints1, keypoints2)
     else:
         print ("Not enough matches are found - %d/%d" % (len(good),MIN_MATCH_COUNT))
         matchesMask = None
+
