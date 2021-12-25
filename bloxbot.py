@@ -105,30 +105,31 @@ def plot_matches(good_matches, query, input_keypoints):
 def find_features_in_input_image(input_image):
     input_keypoints, input_descriptors = orb.detectAndCompute(input_image, None)
 
-    meanshift = create_meanshift(input_keypoints)
+    input_meanshift = create_meanshift(input_keypoints)
 
     # TODO unused, look up
     # cluster_centers = ms.cluster_centers_
 
-    labels = meanshift.labels_
-    labels_unique = np.unique(labels)
-    n_clusters_ = len(labels_unique)
-    print("number of estimated clusters : %d" % n_clusters_)
+    input_labels = input_meanshift.labels_
+    input_labels_unique = np.unique(input_labels)
+    input_n_clusters = len(input_labels_unique)
+    print(f"number of estimated clusters : {input_n_clusters}")
 
-    s = [None] * n_clusters_
-    for i in range(n_clusters_):
-        d, = np.where(meanshift.labels_ == i)
+    s = [None] * input_n_clusters
+    for i in range(input_n_clusters):
+        d, = np.where(input_meanshift.labels_ == i)
         print(d.__len__())
         s[i] = list(input_keypoints[xx] for xx in d)
+    print()
 
     des2_ = input_descriptors
 
     for query_name, query in QUERIES.items():
         print(f'# {query_name}')
-        for i in range(n_clusters_):
+        for i in range(input_n_clusters):
 
             input_keypoints = s[i]
-            d, = np.where(meanshift.labels_ == i)
+            d, = np.where(input_meanshift.labels_ == i)
             input_descriptors = des2_[d,]
 
             FLANN_INDEX_KDTREE = 0
