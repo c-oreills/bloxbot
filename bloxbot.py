@@ -119,14 +119,9 @@ def find_features_in_input_image(input_image):
     print(f"number of estimated clusters : {input_n_clusters}")
     print()
 
-    input_keypoint_clusters = [None] * input_n_clusters
-    for i in range(input_n_clusters):
-        d, = np.where(input_meanshift.labels_ == i)
-        input_keypoint_clusters[i] = list(input_keypoints[xx] for xx in d)
-
     for query_name, query in QUERIES.items():
         print(f'# {query_name}')
-        for (i, input_keypoints) in enumerate(input_keypoint_clusters):
+        for i in range(input_n_clusters):
             d, = np.where(input_meanshift.labels_ == i)
 
             matches = FLANN_MATCHER.knnMatch(np.float32(query['descriptors']),
@@ -140,7 +135,8 @@ def find_features_in_input_image(input_image):
             ]
 
             if len(good_matches) > MIN_MATCH_COUNT:
-                plot_matches(good_matches, query, input_keypoints)
+                cluster_input_keypoints = [input_keypoints[xx] for xx in d]
+                plot_matches(good_matches, query, cluster_input_keypoints)
             else:
                 print("Not enough matches: %d/%d" %
                       (len(good_matches), MIN_MATCH_COUNT))
