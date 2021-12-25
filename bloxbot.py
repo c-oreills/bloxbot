@@ -15,7 +15,11 @@ import sys
 ORDER_MIN_MATCH_COUNT = 30
 # Till images get skewed by perspective, so need more room for error
 TILL_MIN_MATCH_COUNT = 10
+# Till done has very little in the way of features, so needs even more lenience
+TILL_DONE_MIN_MATCH_COUNT = 5
+
 LOWE_MATCH_RATIO = 0.7
+
 LOG_CLUSTER_MATCHES = False
 
 orb = cv.ORB_create(10000, 1.2, nlevels=8, edgeThreshold=5)
@@ -49,15 +53,8 @@ for query_name, query in QUERIES.items():
 TEST_IMG_MATCHES = {
     '1': ('order/sburg', 'order/fries', 'till/sburg', 'till/dburg',
           'till/fburg', 'till/fries', 'till/drink', 'till/done'),
-    '2': (
-        'order/fburg',
-        'till/sburg',
-        'till/dburg',
-        'till/fburg',
-        'till/fries',
-        'till/drink',
-        #'till/done'
-    ),
+    '2': ('order/fburg', 'till/sburg', 'till/dburg', 'till/fburg', 'till/fries',
+          'till/drink', 'till/done'),
     '3': (
         'order/fburg',
         'order/fries',
@@ -69,26 +66,10 @@ TEST_IMG_MATCHES = {
         'till/drink',
         #'till/done'
     ),
-    '4': (
-        'order/sburg',
-        'order/fries',
-        'till/sburg',
-        'till/dburg',
-        'till/fburg',
-        'till/fries',
-        'till/drink',
-        #'till/done'
-    ),
-    '5': (
-        'order/dburg',
-        'order/fries',
-        'till/sburg',
-        'till/dburg',
-        'till/fburg',
-        'till/fries',
-        'till/drink',
-        #'till/done'
-    ),
+    '4': ('order/sburg', 'order/fries', 'till/sburg', 'till/dburg',
+          'till/fburg', 'till/fries', 'till/drink', 'till/done'),
+    '5': ('order/dburg', 'order/fries', 'till/sburg', 'till/dburg',
+          'till/fburg', 'till/fries', 'till/drink', 'till/done'),
 }
 
 FLANN_INDEX_KDTREE = 0
@@ -115,6 +96,8 @@ def create_meanshift(keypoints):
 def get_min_match_count_for_query(query):
     if query['name'].startswith('order/'):
         return ORDER_MIN_MATCH_COUNT
+    if query['name'] == 'till/done':
+        return TILL_DONE_MIN_MATCH_COUNT
     if query['name'].startswith('till/'):
         return TILL_MIN_MATCH_COUNT
     raise ValueError('Unknown query type')
