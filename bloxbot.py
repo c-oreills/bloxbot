@@ -114,21 +114,18 @@ def find_features_in_input_image(input_image):
     input_labels_unique = np.unique(input_labels)
     input_n_clusters = len(input_labels_unique)
     print(f"number of estimated clusters : {input_n_clusters}")
+    print()
 
-    s = [None] * input_n_clusters
+    input_keypoint_clusters = [None] * input_n_clusters
     for i in range(input_n_clusters):
         d, = np.where(input_meanshift.labels_ == i)
-        print(d.__len__())
-        s[i] = list(input_keypoints[xx] for xx in d)
-    print()
+        input_keypoint_clusters[i] = list(input_keypoints[xx] for xx in d)
 
     des2_ = input_descriptors
 
     for query_name, query in QUERIES.items():
         print(f'# {query_name}')
-        for i in range(input_n_clusters):
-
-            input_keypoints = s[i]
+        for (i, input_keypoints) in enumerate(input_keypoint_clusters):
             d, = np.where(input_meanshift.labels_ == i)
             input_descriptors = des2_[d,]
 
