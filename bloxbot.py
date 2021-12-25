@@ -15,11 +15,24 @@ LOWE_MATCH_RATIO = 0.7
 
 orb = cv.ORB_create(10000, 1.2, nlevels=8, edgeThreshold=5)
 
-QUERY_NAMES = ('sburg', 'dburg', 'fburg', 'fries', 'drink', 'done')
+QUERY_NAMES = (
+    # Order impages (use to parse order)
+    'order/sburg',
+    'order/dburg',
+    'order/fburg',
+    'order/fries',
+    'order/drink',
+    # Till images (use to serve order)
+    'till/sburg',
+    'till/dburg',
+    'till/fburg',
+    'till/fries',
+    'till/drink',
+    'till/done')
 QUERIES = {
     query_name: {
         'name': query_name,
-        'image': cv.imread(f'{query_name}.png', 0)
+        'image': cv.imread(f'imgs/{query_name}.png', 0)
     }
     for query_name in QUERY_NAMES
 }
@@ -28,7 +41,7 @@ for query_name, query in QUERIES.items():
         query['image'], None)
     query.update(keypoints=query_keypoints, descriptors=query_descriptors)
 
-img2 = cv.imread('testimgs/1.png', 0)  # trainImage
+img2 = cv.imread('imgs/test/1.png', 0)  # trainImage
 
 
 def create_meanshift(keypoints):
