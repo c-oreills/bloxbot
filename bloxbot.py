@@ -15,6 +15,7 @@ ORDER_MIN_MATCH_COUNT = 30
 # Till images get skewed by perspective, so need more room for error
 TILL_MIN_MATCH_COUNT = 10
 LOWE_MATCH_RATIO = 0.7
+LOG_CLUSTER_MATCHES = False
 
 orb = cv.ORB_create(10000, 1.2, nlevels=8, edgeThreshold=5)
 
@@ -112,7 +113,7 @@ def plot_matches(query, input_keypoints, input_descriptors, good_matches,
         flags=2)
 
     centre_pt = np.average(dst_pts, axis=0)
-    print(f'Match at {centre_pt}: {len(good_matches)} matches')
+    print(f'Match at {centre_pt}: {len(good_matches)} good matches')
 
     draw = False
     if not draw:
@@ -161,17 +162,21 @@ def find_features_in_input_image(input_image):
 
             good_matches_count = len(good_matches)
             if good_matches_count >= min_match_count:
-                print(f"Match: {len(good_matches)}/{min_match_count}")
+                if LOG_CLUSTER_MATCHES:
+                    print(f"Match: {len(good_matches)}/{min_match_count}")
                 if good_matches_count > best_match_count:
                     best_match_count = good_matches_count
                     best_match = (good_matches, cluster_descriptor_indexes)
             else:
-                print(f"No Match: {len(good_matches)}/{min_match_count}")
+                if LOG_CLUSTER_MATCHES:
+                    print(f"No Match: {len(good_matches)}/{min_match_count}")
 
         if best_match:
             good_matches, cluster_descriptor_indexes = best_match
             plot_matches(query, input_keypoints, input_descriptors,
                          good_matches, cluster_descriptor_indexes)
+        else:
+            print('No Match')
 
         print()
 
