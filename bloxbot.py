@@ -126,19 +126,14 @@ def find_features_in_input_image(input_image):
         d, = np.where(input_meanshift.labels_ == i)
         input_keypoint_clusters[i] = list(input_keypoints[xx] for xx in d)
 
-    des2_ = input_descriptors
-
-
     for query_name, query in QUERIES.items():
         print(f'# {query_name}')
         for (i, input_keypoints) in enumerate(input_keypoint_clusters):
             d, = np.where(input_meanshift.labels_ == i)
-            input_descriptors = des2_[d,]
 
-            query_descriptors = np.float32(query['descriptors'])
-            input_descriptors = np.float32(input_descriptors)
-
-            matches = FLANN_MATCHER.knnMatch(query_descriptors, input_descriptors, 2)
+            matches = FLANN_MATCHER.knnMatch(np.float32(query['descriptors']),
+                                             np.float32(input_descriptors[d,]),
+                                             2)
 
             # store all the good_matches matches as per Lowe's ratio test.
             good_matches = [
