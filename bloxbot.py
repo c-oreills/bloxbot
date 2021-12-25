@@ -64,12 +64,19 @@ def create_meanshift(keypoints):
     return ms
 
 
-def plot_matches(good_matches, query, input_keypoints):
+def plot_matches(good_matches, query, input_keypoints, input_descriptors,
+                 cluster_descriptor_indexes):
+
+    cluster_input_keypoints = [
+        input_keypoints[index] for index in cluster_descriptor_indexes
+    ]
+
     src_pts = np.float32([
         query['keypoints'][m.queryIdx].pt for m in good_matches
     ]).reshape(-1, 1, 2)
-    dst_pts = np.float32([input_keypoints[m.trainIdx].pt
-                          for m in good_matches]).reshape(-1, 1, 2)
+    dst_pts = np.float32([
+        cluster_input_keypoints[m.trainIdx].pt for m in good_matches
+    ]).reshape(-1, 1, 2)
 
     M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 2)
 
@@ -101,7 +108,7 @@ def plot_matches(good_matches, query, input_keypoints):
         return
 
     match_display_img = cv.drawMatches(query['image'], query['keypoints'],
-                                       input_img_poly, input_keypoints,
+                                       input_img_poly, cluster_input_keypoints,
                                        good_matches, None, **draw_params)
     plt.imshow(match_display_img, 'gray'), plt.show()
 
@@ -122,13 +129,15 @@ def find_features_in_input_image(input_image):
 
     for query_name, query in QUERIES.items():
         print(f'# {query_name}')
+        best_match_count, best_match = 0, None
+
         for i in range(input_n_clusters):
-            # "descriptor_indexes" is a guess as what these actually are
-            descriptor_indexes, = np.where(input_meanshift.labels_ == i)
+            # "cluster_descriptor_indexes" is a guess as what these actually are
+            cluster_descriptor_indexes, = np.where(input_meanshift.labels_ == i)
 
             matches = FLANN_MATCHER.knnMatch(
                 np.float32(query['descriptors']),
-                np.float32(input_descriptors[descriptor_indexes,]), 2)
+                np.float32(input_descriptors[cluster_descriptor_indexes,]), 2)
 
             # store all the good_matches matches as per Lowe's ratio test.
             good_matches = [
@@ -136,15 +145,14 @@ def find_features_in_input_image(input_image):
                 if m.distance < LOWE_MATCH_RATIO * n.distance
             ]
 
-            if len(good_matches) >= MIN_MATCH_COUNT:
-                cluster_input_keypoints = [
-                    input_keypoints[index] for index in descriptor_indexes
-                ]
-                plot_matches(good_matches, query, cluster_input_keypoints)
+            good_matches_count = len(good_matches)
+            if good_matches_count >= MIN_MATCH_COUNT:
+                plot_matches(good_matches, query, input_keypoints,
+                             input_descriptors, cluster_descriptor_indexes)
             else:
                 print("Not enough matches: %d/%d" %
                       (len(good_matches), MIN_MATCH_COUNT))
-                matchesMask = None
+
         print()
 
 
