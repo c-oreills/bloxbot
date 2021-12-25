@@ -84,8 +84,8 @@ def plot_matches(good_matches, query, input_keypoints):
                       [w - 1, 0]]).reshape(-1, 1, 2)
     dst = cv.perspectiveTransform(pts, M)
 
-    img2_poly = cv.polylines(input_img, [np.int32(dst)], True, 255, 3,
-                             cv.LINE_AA)
+    input_img_poly = cv.polylines(input_img, [np.int32(dst)], True, 255, 3,
+                                  cv.LINE_AA)
 
     draw_params = dict(
         matchColor=(0, 255, 0),  # draw matches in green color
@@ -100,9 +100,10 @@ def plot_matches(good_matches, query, input_keypoints):
     if not draw:
         return
 
-    img3 = cv.drawMatches(query['image'], query['keypoints'], img2_poly,
-                          input_keypoints, good_matches, None, **draw_params)
-    plt.imshow(img3, 'gray'), plt.show()
+    match_display_img = cv.drawMatches(query['image'], query['keypoints'],
+                                       input_img_poly, input_keypoints,
+                                       good_matches, None, **draw_params)
+    plt.imshow(match_display_img, 'gray'), plt.show()
 
 
 def find_features_in_input_image(input_image):
