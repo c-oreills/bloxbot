@@ -10,7 +10,10 @@ import numpy as np
 import pyscreenshot as ImageGrab
 from sklearn.cluster import MeanShift, estimate_bandwidth
 
-MIN_MATCH_COUNT = 10
+# Order images aren't skewed by perspective, so match threshold can be higher
+ORDER_MIN_MATCH_COUNT = 30
+# Till images get skewed by perspective, so need more room for error
+TILL_MIN_MATCH_COUNT = 10
 LOWE_MATCH_RATIO = 0.7
 
 orb = cv.ORB_create(10000, 1.2, nlevels=8, edgeThreshold=5)
@@ -64,6 +67,14 @@ def create_meanshift(keypoints):
     return ms
 
 
+def get_min_match_count_for_query(query):
+    if query['name'].startswith('order/'):
+        return ORDER_MIN_MATCH_COUNT
+    if query['name'].startswith('till/'):
+        return TILL_MIN_MATCH_COUNT
+    raise ValueError('Unknown query type')
+
+
 def plot_matches(query, input_keypoints, input_descriptors, good_matches,
                  cluster_descriptor_indexes):
 
@@ -101,7 +112,7 @@ def plot_matches(query, input_keypoints, input_descriptors, good_matches,
         flags=2)
 
     centre_pt = np.average(dst_pts, axis=0)
-    print(f'Match at {centre_pt}: {len(good_matches)}/{MIN_MATCH_COUNT}')
+    print(f'Match at {centre_pt}: {len(good_matches)} matches')
 
     draw = False
     if not draw:
@@ -129,6 +140,9 @@ def find_features_in_input_image(input_image):
 
     for query_name, query in QUERIES.items():
         print(f'# {query_name}')
+
+        min_match_count = get_min_match_count_for_query(query)
+
         best_match_count, best_match = 0, None
 
         for i in range(input_n_clusters):
@@ -146,14 +160,13 @@ def find_features_in_input_image(input_image):
             ]
 
             good_matches_count = len(good_matches)
-            if good_matches_count >= MIN_MATCH_COUNT:
-                print(f'Match: {len(good_matches)}/{MIN_MATCH_COUNT}')
+            if good_matches_count >= min_match_count:
+                print(f"Match: {len(good_matches)}/{min_match_count}")
                 if good_matches_count > best_match_count:
                     best_match_count = good_matches_count
                     best_match = (good_matches, cluster_descriptor_indexes)
             else:
-                print("Not enough matches: %d/%d" %
-                      (len(good_matches), MIN_MATCH_COUNT))
+                print(f"No Match: {len(good_matches)}/{min_match_count}")
 
         if best_match:
             good_matches, cluster_descriptor_indexes = best_match
