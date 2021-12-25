@@ -41,7 +41,7 @@ for query_name, query in QUERIES.items():
         query['image'], None)
     query.update(keypoints=query_keypoints, descriptors=query_descriptors)
 
-img2 = cv.imread('imgs/test/1.png', 0)  # trainImage
+input_img = cv.imread('imgs/test/1.png', 0)
 
 
 def create_meanshift(keypoints):
@@ -59,11 +59,11 @@ def create_meanshift(keypoints):
     return ms
 
 
-def plot_matches(good_matches, query, train_keypoints):
+def plot_matches(good_matches, query, input_keypoints):
     src_pts = np.float32([
         query['keypoints'][m.queryIdx].pt for m in good_matches
     ]).reshape(-1, 1, 2)
-    dst_pts = np.float32([train_keypoints[m.trainIdx].pt
+    dst_pts = np.float32([input_keypoints[m.trainIdx].pt
                           for m in good_matches]).reshape(-1, 1, 2)
 
     M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 2)
@@ -79,7 +79,8 @@ def plot_matches(good_matches, query, train_keypoints):
                       [w - 1, 0]]).reshape(-1, 1, 2)
     dst = cv.perspectiveTransform(pts, M)
 
-    img2_poly = cv.polylines(img2, [np.int32(dst)], True, 255, 3, cv.LINE_AA)
+    img2_poly = cv.polylines(input_img, [np.int32(dst)], True, 255, 3,
+                             cv.LINE_AA)
 
     draw_params = dict(
         matchColor=(0, 255, 0),  # draw matches in green color
@@ -97,14 +98,14 @@ def plot_matches(good_matches, query, train_keypoints):
         return
 
     img3 = cv.drawMatches(query['image'], query['keypoints'], img2_poly,
-                          train_keypoints, good_matches, None, **draw_params)
+                          input_keypoints, good_matches, None, **draw_params)
     plt.imshow(img3, 'gray'), plt.show()
 
 
-def find_features_in_train_image(train_image):
-    train_keypoints, train_descriptors = orb.detectAndCompute(train_image, None)
+def find_features_in_input_image(input_image):
+    input_keypoints, input_descriptors = orb.detectAndCompute(input_image, None)
 
-    meanshift = create_meanshift(train_keypoints)
+    meanshift = create_meanshift(input_keypoints)
 
     # TODO unused, look up
     # cluster_centers = ms.cluster_centers_
@@ -118,17 +119,17 @@ def find_features_in_train_image(train_image):
     for i in range(n_clusters_):
         d, = np.where(meanshift.labels_ == i)
         print(d.__len__())
-        s[i] = list(train_keypoints[xx] for xx in d)
+        s[i] = list(input_keypoints[xx] for xx in d)
 
-    des2_ = train_descriptors
+    des2_ = input_descriptors
 
     for query_name, query in QUERIES.items():
         print(f'# {query_name}')
         for i in range(n_clusters_):
 
-            train_keypoints = s[i]
+            input_keypoints = s[i]
             d, = np.where(meanshift.labels_ == i)
-            train_descriptors = des2_[d,]
+            input_descriptors = des2_[d,]
 
             FLANN_INDEX_KDTREE = 0
             index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
@@ -137,9 +138,9 @@ def find_features_in_train_image(train_image):
             flann = cv.FlannBasedMatcher(index_params, search_params)
 
             query_descriptors = np.float32(query['descriptors'])
-            train_descriptors = np.float32(train_descriptors)
+            input_descriptors = np.float32(input_descriptors)
 
-            matches = flann.knnMatch(query_descriptors, train_descriptors, 2)
+            matches = flann.knnMatch(query_descriptors, input_descriptors, 2)
 
             # store all the good_matches matches as per Lowe's ratio test.
             good_matches = [
@@ -148,7 +149,7 @@ def find_features_in_train_image(train_image):
             ]
 
             if len(good_matches) > MIN_MATCH_COUNT:
-                plot_matches(good_matches, query, train_keypoints)
+                plot_matches(good_matches, query, input_keypoints)
             else:
                 print("Not enough matches: %d/%d" %
                       (len(good_matches), MIN_MATCH_COUNT))
@@ -156,4 +157,4 @@ def find_features_in_train_image(train_image):
         print()
 
 
-find_features_in_train_image(img2)
+find_features_in_input_image(input_img)
