@@ -122,11 +122,12 @@ def find_features_in_input_image(input_image):
     for query_name, query in QUERIES.items():
         print(f'# {query_name}')
         for i in range(input_n_clusters):
-            d, = np.where(input_meanshift.labels_ == i)
+            # "descriptor_indexes" is a guess as what these actually are
+            descriptor_indexes, = np.where(input_meanshift.labels_ == i)
 
-            matches = FLANN_MATCHER.knnMatch(np.float32(query['descriptors']),
-                                             np.float32(input_descriptors[d,]),
-                                             2)
+            matches = FLANN_MATCHER.knnMatch(
+                np.float32(query['descriptors']),
+                np.float32(input_descriptors[descriptor_indexes,]), 2)
 
             # store all the good_matches matches as per Lowe's ratio test.
             good_matches = [
@@ -135,7 +136,9 @@ def find_features_in_input_image(input_image):
             ]
 
             if len(good_matches) > MIN_MATCH_COUNT:
-                cluster_input_keypoints = [input_keypoints[xx] for xx in d]
+                cluster_input_keypoints = [
+                    input_keypoints[index] for index in descriptor_indexes
+                ]
                 plot_matches(good_matches, query, cluster_input_keypoints)
             else:
                 print("Not enough matches: %d/%d" %
