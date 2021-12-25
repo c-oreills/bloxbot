@@ -10,7 +10,7 @@ import numpy as np
 import pyscreenshot as ImageGrab
 from sklearn.cluster import MeanShift, estimate_bandwidth
 
-MIN_MATCH_COUNT = 5
+MIN_MATCH_COUNT = 10
 LOWE_MATCH_RATIO = 0.7
 
 orb = cv.ORB_create(10000, 1.2, nlevels=8, edgeThreshold=5)
@@ -135,7 +135,7 @@ def find_features_in_input_image(input_image):
                 if m.distance < LOWE_MATCH_RATIO * n.distance
             ]
 
-            if len(good_matches) > MIN_MATCH_COUNT:
+            if len(good_matches) >= MIN_MATCH_COUNT:
                 cluster_input_keypoints = [
                     input_keypoints[index] for index in descriptor_indexes
                 ]
