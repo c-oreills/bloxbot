@@ -64,7 +64,7 @@ def create_meanshift(keypoints):
     return ms
 
 
-def plot_matches(good_matches, query, input_keypoints, input_descriptors,
+def plot_matches(query, input_keypoints, input_descriptors, good_matches,
                  cluster_descriptor_indexes):
 
     cluster_input_keypoints = [
@@ -147,11 +147,18 @@ def find_features_in_input_image(input_image):
 
             good_matches_count = len(good_matches)
             if good_matches_count >= MIN_MATCH_COUNT:
-                plot_matches(good_matches, query, input_keypoints,
-                             input_descriptors, cluster_descriptor_indexes)
+                print(f'Match: {len(good_matches)}/{MIN_MATCH_COUNT}')
+                if good_matches_count > best_match_count:
+                    best_match_count = good_matches_count
+                    best_match = (good_matches, cluster_descriptor_indexes)
             else:
                 print("Not enough matches: %d/%d" %
                       (len(good_matches), MIN_MATCH_COUNT))
+
+        if best_match:
+            good_matches, cluster_descriptor_indexes = best_match
+            plot_matches(query, input_keypoints, input_descriptors,
+                         good_matches, cluster_descriptor_indexes)
 
         print()
 
