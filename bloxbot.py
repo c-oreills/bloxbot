@@ -9,6 +9,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pyscreenshot as ImageGrab
 from sklearn.cluster import MeanShift, estimate_bandwidth
+import sys
 
 # Order images aren't skewed by perspective, so match threshold can be higher
 ORDER_MIN_MATCH_COUNT = 30
@@ -119,8 +120,8 @@ def get_min_match_count_for_query(query):
     raise ValueError('Unknown query type')
 
 
-def plot_matches(query, input_keypoints, input_descriptors, good_matches,
-                 cluster_descriptor_indexes):
+def plot_matches(query, input_image, input_keypoints, input_descriptors,
+                 good_matches, cluster_descriptor_indexes):
 
     cluster_input_keypoints = [
         input_keypoints[index] for index in cluster_descriptor_indexes
@@ -146,7 +147,7 @@ def plot_matches(query, input_keypoints, input_descriptors, good_matches,
                       [w - 1, 0]]).reshape(-1, 1, 2)
     dst = cv.perspectiveTransform(pts, M)
 
-    input_img_poly = cv.polylines(input_img, [np.int32(dst)], True, 255, 3,
+    input_img_poly = cv.polylines(input_image, [np.int32(dst)], True, 255, 3,
                                   cv.LINE_AA)
 
     draw_params = dict(
@@ -220,7 +221,7 @@ def match_objects_in_input_image(input_image):
 
         if best_match:
             good_matches, cluster_descriptor_indexes = best_match
-            plot_matches(query, input_keypoints, input_descriptors,
+            plot_matches(query, input_image, input_keypoints, input_descriptors,
                          good_matches, cluster_descriptor_indexes)
         else:
             print('No Match')
@@ -229,14 +230,21 @@ def match_objects_in_input_image(input_image):
     return object_matches
 
 
-for img_name, expected_match_names in TEST_IMG_MATCHES.items():
-    input_img = cv.imread(f'imgs/test/{img_name}.png', 0)
-    object_matches = match_objects_in_input_image(input_img)
-    actual_match_names = {
-        query_name
-        for query_name, match in object_matches.items() if match is not None
-    }
+def run_test_match_objects():
+    for img_name, expected_match_names in TEST_IMG_MATCHES.items():
+        input_img = cv.imread(f'imgs/test/{img_name}.png', 0)
+        object_matches = match_objects_in_input_image(input_img)
+        actual_match_names = {
+            query_name
+            for query_name, match in object_matches.items() if match is not None
+        }
 
-    assert set(
-        expected_match_names
-    ) == actual_match_names, f"test img {img_name}; {expected_match_names} != {actual_match_names}"
+        assert set(
+            expected_match_names
+        ) == actual_match_names, f"test img {img_name}; {expected_match_names} != {actual_match_names}"
+
+
+if __name__ == '__main__':
+    COMMANDS = {'test': run_test_match_objects}
+
+    COMMANDS[sys.argv[1]]()
