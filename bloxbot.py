@@ -94,9 +94,7 @@ def plot_matches(good_matches, query, input_keypoints):
         flags=2)
 
     centre_pt = np.average(dst_pts, axis=0)
-    print(
-        f'Match at {centre_pt}: {len(good_matches)}/{MIN_MATCH_COUNT}'
-    )
+    print(f'Match at {centre_pt}: {len(good_matches)}/{MIN_MATCH_COUNT}')
 
     draw = False
     if not draw:
