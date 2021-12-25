@@ -43,6 +43,11 @@ for query_name, query in QUERIES.items():
 
 input_img = cv.imread('imgs/test/1.png', 0)
 
+FLANN_INDEX_KDTREE = 0
+INDEX_PARAMS = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+SEARCH_PARAMS = dict(checks=50)
+FLANN_MATCHER = cv.FlannBasedMatcher(INDEX_PARAMS, SEARCH_PARAMS)
+
 
 def create_meanshift(keypoints):
     x = np.array([keypoints[0].pt])
@@ -123,22 +128,17 @@ def find_features_in_input_image(input_image):
 
     des2_ = input_descriptors
 
+
     for query_name, query in QUERIES.items():
         print(f'# {query_name}')
         for (i, input_keypoints) in enumerate(input_keypoint_clusters):
             d, = np.where(input_meanshift.labels_ == i)
             input_descriptors = des2_[d,]
 
-            FLANN_INDEX_KDTREE = 0
-            index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-            search_params = dict(checks=50)
-
-            flann = cv.FlannBasedMatcher(index_params, search_params)
-
             query_descriptors = np.float32(query['descriptors'])
             input_descriptors = np.float32(input_descriptors)
 
-            matches = flann.knnMatch(query_descriptors, input_descriptors, 2)
+            matches = FLANN_MATCHER.knnMatch(query_descriptors, input_descriptors, 2)
 
             # store all the good_matches matches as per Lowe's ratio test.
             good_matches = [
