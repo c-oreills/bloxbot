@@ -45,7 +45,50 @@ for query_name, query in QUERIES.items():
         query['image'], None)
     query.update(keypoints=query_keypoints, descriptors=query_descriptors)
 
-input_img = cv.imread('imgs/test/1.png', 0)
+TEST_IMG_MATCHES = {
+    '1': ('order/sburg', 'order/fries', 'till/sburg', 'till/dburg',
+          'till/fburg', 'till/fries', 'till/drink', 'till/done'),
+    '2': (
+        'order/fburg',
+        'till/sburg',
+        'till/dburg',
+        'till/fburg',
+        'till/fries',
+        'till/drink',
+        #'till/done'
+    ),
+    '3': (
+        'order/fburg',
+        'order/fries',
+        'order/drink',
+        'till/sburg',
+        'till/dburg',
+        'till/fburg',
+        'till/fries',
+        'till/drink',
+        #'till/done'
+    ),
+    '4': (
+        'order/sburg',
+        'order/fries',
+        'till/sburg',
+        'till/dburg',
+        'till/fburg',
+        'till/fries',
+        'till/drink',
+        #'till/done'
+    ),
+    '5': (
+        'order/dburg',
+        'order/fries',
+        'till/sburg',
+        'till/dburg',
+        'till/fburg',
+        'till/fries',
+        'till/drink',
+        #'till/done'
+    ),
+}
 
 FLANN_INDEX_KDTREE = 0
 INDEX_PARAMS = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
@@ -125,7 +168,7 @@ def plot_matches(query, input_keypoints, input_descriptors, good_matches,
     plt.imshow(match_display_img, 'gray'), plt.show()
 
 
-def find_features_in_input_image(input_image):
+def match_objects_in_input_image(input_image):
     input_keypoints, input_descriptors = orb.detectAndCompute(input_image, None)
 
     input_meanshift = create_meanshift(input_keypoints)
@@ -138,6 +181,8 @@ def find_features_in_input_image(input_image):
     input_n_clusters = len(input_labels_unique)
     print(f"number of estimated clusters : {input_n_clusters}")
     print()
+
+    object_matches = {}
 
     for query_name, query in QUERIES.items():
         print(f'# {query_name}')
@@ -171,6 +216,8 @@ def find_features_in_input_image(input_image):
                 if LOG_CLUSTER_MATCHES:
                     print(f"No Match: {len(good_matches)}/{min_match_count}")
 
+        object_matches[query_name] = best_match
+
         if best_match:
             good_matches, cluster_descriptor_indexes = best_match
             plot_matches(query, input_keypoints, input_descriptors,
@@ -179,6 +226,17 @@ def find_features_in_input_image(input_image):
             print('No Match')
 
         print()
+    return object_matches
 
 
-find_features_in_input_image(input_img)
+for img_name, expected_match_names in TEST_IMG_MATCHES.items():
+    input_img = cv.imread(f'imgs/test/{img_name}.png', 0)
+    object_matches = match_objects_in_input_image(input_img)
+    actual_match_names = {
+        query_name
+        for query_name, match in object_matches.items() if match is not None
+    }
+
+    assert set(
+        expected_match_names
+    ) == actual_match_names, f"test img {img_name}; {expected_match_names} != {actual_match_names}"
