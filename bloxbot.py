@@ -23,7 +23,10 @@ TILL_DONE_MIN_MATCH_COUNT = 5
 
 LOWE_MATCH_RATIO = 0.7
 
+# Logging/display configuration - set to True for more verbose output,
+# including visual displays of detected objects
 LOG_CLUSTER_MATCHES = False
+DISPLAY_DETECTED_OBJECTS = False
 
 orb = cv.ORB_create(10000, 1.2, nlevels=8, edgeThreshold=5)
 
@@ -41,17 +44,27 @@ QUERY_NAMES = (
     'till/fries',
     'till/drink',
     'till/done')
-QUERIES = {
-    query_name: {
-        'name': query_name,
-        'image': cv.imread(f'imgs/{query_name}.png', 0)
+
+
+def initialise_queries():
+    # Initialised in a function so as not to pollute the global scope
+    queries = {
+        query_name: {
+            'name': query_name,
+            'image': cv.imread(f'imgs/{query_name}.png', 0)
+        }
+        for query_name in QUERY_NAMES
     }
-    for query_name in QUERY_NAMES
-}
-for query_name, query in QUERIES.items():
-    query_keypoints, query_descriptors = orb.detectAndCompute(
-        query['image'], None)
-    query.update(keypoints=query_keypoints, descriptors=query_descriptors)
+
+    for query_name, query in queries.items():
+        query_keypoints, query_descriptors = orb.detectAndCompute(
+            query['image'], None)
+        query.update(keypoints=query_keypoints, descriptors=query_descriptors)
+
+    return queries
+
+
+QUERIES = initialise_queries()
 
 TEST_IMG_MATCHES = {
     '1': ('order/sburg', 'order/fries', 'till/sburg', 'till/dburg',
@@ -106,8 +119,32 @@ def get_min_match_count_for_query(query):
     raise ValueError('Unknown query type')
 
 
-def plot_matches(query, input_image, input_keypoints, input_descriptors,
-                 good_matches, descriptor_indexes):
+def display_detected_object(query, input_image, good_matches,
+                            cluster_input_keypoints, M, mask):
+    matchesMask = mask.ravel().tolist()
+
+    h, w = query['image'].shape
+    pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1],
+                      [w - 1, 0]]).reshape(-1, 1, 2)
+
+    dst = cv.perspectiveTransform(pts, M)
+    input_img_poly = cv.polylines(input_image, [np.int32(dst)], True, 255, 3,
+                                  cv.LINE_AA)
+    draw_params = dict(
+        matchColor=(0, 255, 0),  # draw matches in green color
+        singlePointColor=None,
+        matchesMask=matchesMask,  # draw only inliers
+        flags=2)
+
+    match_display_img = cv.drawMatches(query['image'], query['keypoints'],
+                                       input_img_poly, cluster_input_keypoints,
+                                       good_matches, None, **draw_params)
+    plt.imshow(match_display_img, 'gray'), plt.show()
+
+
+def locate_detected_object_centre(query, input_image, input_keypoints,
+                                  input_descriptors, good_matches,
+                                  descriptor_indexes):
     cluster_input_keypoints = [
         input_keypoints[index] for index in descriptor_indexes
     ]
@@ -122,41 +159,18 @@ def plot_matches(query, input_image, input_keypoints, input_descriptors,
     M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 2)
 
     if M is None:
-        print("No Homography")
-        return
+        return None
 
-    matchesMask = mask.ravel().tolist()
+    if DISPLAY_DETECTED_OBJECTS:
+        display_detected_object(query, input_image, good_matches,
+                                cluster_input_keypoints, M, mask)
 
-    h, w = query['image'].shape
-    pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1],
-                      [w - 1, 0]]).reshape(-1, 1, 2)
-    dst = cv.perspectiveTransform(pts, M)
+    centre_pt, = np.average(dst_pts, axis=0)
 
-    input_img_poly = cv.polylines(input_image, [np.int32(dst)], True, 255, 3,
-                                  cv.LINE_AA)
-
-    draw_params = dict(
-        matchColor=(0, 255, 0),  # draw matches in green color
-        singlePointColor=None,
-        matchesMask=matchesMask,  # draw only inliers
-        flags=2)
-
-    centre_pt = np.average(dst_pts, axis=0)
-    print(
-        f"{query_name} - Match at {centre_pt}: {len(good_matches)} good matches"
-    )
-
-    draw = False
-    if not draw:
-        return
-
-    match_display_img = cv.drawMatches(query['image'], query['keypoints'],
-                                       input_img_poly, cluster_input_keypoints,
-                                       good_matches, None, **draw_params)
-    plt.imshow(match_display_img, 'gray'), plt.show()
+    return centre_pt
 
 
-def match_objects_in_input_image(input_image):
+def detect_objects_in_input_image(input_image):
     input_keypoints, input_descriptors = orb.detectAndCompute(input_image, None)
 
     input_meanshift = create_meanshift(input_keypoints)
@@ -175,7 +189,7 @@ def match_objects_in_input_image(input_image):
     if LOG_CLUSTER_MATCHES:
         print(f"number of estimated clusters : {input_n_clusters}\n")
 
-    object_matches = {}
+    detected_object_centres = {}
 
     for query_name, query in QUERIES.items():
         float_query_descriptors = np.float32(query['descriptors'])
@@ -199,7 +213,8 @@ def match_objects_in_input_image(input_image):
             if good_matches_count >= min_match_count:
                 if LOG_CLUSTER_MATCHES:
                     print(
-                        f"{query_name} - Match: {len(good_matches)}/{min_match_count}"
+                        f"{query_name} - Match: "
+                        f"{len(good_matches)}/{min_match_count}"
                     )
                 if good_matches_count > best_match_count:
                     best_match_count = good_matches_count
@@ -207,24 +222,33 @@ def match_objects_in_input_image(input_image):
             else:
                 if LOG_CLUSTER_MATCHES:
                     print(
-                        f"{query_name} - No Match: {len(good_matches)}/{min_match_count}"
+                        f"{query_name} - No Match: "
+                        f"{len(good_matches)}/{min_match_count}"
                     )
-
-        object_matches[query_name] = best_match
 
         if best_match:
             good_matches, descriptor_indexes = best_match
-            plot_matches(query, input_image, input_keypoints, input_descriptors,
-                         good_matches, descriptor_indexes)
+            detected_object_centre = locate_detected_object_centre(
+                query, input_image, input_keypoints, input_descriptors,
+                good_matches, descriptor_indexes)
+            if detected_object_centre is not None:
+                detected_object_centres[query_name] = detected_object_centre
+                print(
+                    f"{query_name} - Match at {detected_object_centre}: "
+                    f"{len(good_matches)}/{min_match_count}"
+                )
+            else:
+                print(f"{query_name} - Could not find centre, no homography")
         else:
             print(f"{query_name} - No Match")
-    return object_matches
+
+    return detected_object_centres
 
 
 def run_test_match_objects():
     for img_name, expected_match_names in TEST_IMG_MATCHES.items():
         input_img = cv.imread(f'imgs/test/{img_name}.png', 0)
-        object_matches = match_objects_in_input_image(input_img)
+        object_matches = detect_objects_in_input_image(input_img)
         actual_match_names = {
             query_name
             for query_name, match in object_matches.items() if match is not None
@@ -237,7 +261,7 @@ def run_test_match_objects():
 
 def run_test_match_written_screenshot():
     input_image = cv.imread('imgs/screen.png', 0)
-    object_matches = match_objects_in_input_image(input_image)
+    object_matches = detect_objects_in_input_image(input_image)
 
 
 def run_bot_service():
@@ -247,17 +271,12 @@ def run_bot_service():
         cv.imwrite('imgs/screen.png', input_image)
 
         try:
-            object_matches = match_objects_in_input_image(input_image)
+            detected_object_centres = detect_objects_in_input_image(input_image)
         except cv.error as e:
             print(f"Skipping Frame: Caught error {e}")
             continue
 
-        successful_matches = {
-            query_name
-            for query_name, match in object_matches.items() if match is not None
-        }
-
-        print(f"Matched {successful_matches}")
+        print(f"Matched {tuple(detected_object_centres.keys())}")
 
         sleep(1)
 
