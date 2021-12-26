@@ -108,7 +108,6 @@ def get_min_match_count_for_query(query):
 
 def plot_matches(query, input_image, input_keypoints, input_descriptors,
                  good_matches, cluster_descriptor_indexes):
-
     cluster_input_keypoints = [
         input_keypoints[index] for index in cluster_descriptor_indexes
     ]
@@ -143,7 +142,9 @@ def plot_matches(query, input_image, input_keypoints, input_descriptors,
         flags=2)
 
     centre_pt = np.average(dst_pts, axis=0)
-    print(f'Match at {centre_pt}: {len(good_matches)} good matches')
+    print(
+        f"{query_name} - Match at {centre_pt}: {len(good_matches)} good matches"
+    )
 
     draw = False
     if not draw:
@@ -166,14 +167,13 @@ def match_objects_in_input_image(input_image):
     input_labels = input_meanshift.labels_
     input_labels_unique = np.unique(input_labels)
     input_n_clusters = len(input_labels_unique)
-    print(f"number of estimated clusters : {input_n_clusters}")
-    print()
+
+    if LOG_CLUSTER_MATCHES:
+        print(f"number of estimated clusters : {input_n_clusters}\n")
 
     object_matches = {}
 
     for query_name, query in QUERIES.items():
-        print(f'# {query_name}')
-
         min_match_count = get_min_match_count_for_query(query)
 
         best_match_count, best_match = 0, None
@@ -195,13 +195,17 @@ def match_objects_in_input_image(input_image):
             good_matches_count = len(good_matches)
             if good_matches_count >= min_match_count:
                 if LOG_CLUSTER_MATCHES:
-                    print(f"Match: {len(good_matches)}/{min_match_count}")
+                    print(
+                        f"{query_name} - Match: {len(good_matches)}/{min_match_count}"
+                    )
                 if good_matches_count > best_match_count:
                     best_match_count = good_matches_count
                     best_match = (good_matches, cluster_descriptor_indexes)
             else:
                 if LOG_CLUSTER_MATCHES:
-                    print(f"No Match: {len(good_matches)}/{min_match_count}")
+                    print(
+                        f"{query_name} - No Match: {len(good_matches)}/{min_match_count}"
+                    )
 
         object_matches[query_name] = best_match
 
@@ -210,9 +214,7 @@ def match_objects_in_input_image(input_image):
             plot_matches(query, input_image, input_keypoints, input_descriptors,
                          good_matches, cluster_descriptor_indexes)
         else:
-            print('No Match')
-
-        print()
+            print(f"{query_name} - No Match")
     return object_matches
 
 
