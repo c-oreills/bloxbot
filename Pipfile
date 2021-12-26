@@ -9,6 +9,7 @@ pillow = "*"
 pyscreenshot = "*"
 matplotlib = "*"
 sklearn = "*"
+pyautogui = "*"
 
 [requires]
 python_version = "3.9"

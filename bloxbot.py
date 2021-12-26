@@ -4,12 +4,15 @@
 # https://docs.opencv.org/4.x/dc/dc3/tutorial_py_matcher.html
 # https://stackoverflow.com/questions/42938149/opencv-feature-matching-multiple-objects
 
-import cv
-from matplotlib import pyplot as plt
-import numpy as np
-import pyscreenshot as ImageGrab
-from sklearn.cluster import MeanShift, estimate_bandwidth
 import sys
+from time import sleep
+
+import numpy as np
+import pyautogui
+from matplotlib import pyplot as plt
+from sklearn.cluster import MeanShift, estimate_bandwidth
+
+import cv
 
 # Order images aren't skewed by perspective, so match threshold can be higher
 ORDER_MIN_MATCH_COUNT = 30
@@ -227,7 +230,38 @@ def run_test_match_objects():
         ) == actual_match_names, f"test img {img_name}; {expected_match_names} != {actual_match_names}"
 
 
+def run_test_match_written_screenshot():
+    input_image = cv.imread('imgs/screen.png', 0)
+    object_matches = match_objects_in_input_image(input_image)
+
+
+def run_bot_service():
+    while True:
+        input_image = pyautogui.screenshot()
+        input_image = cv.cvtColor(np.array(input_image), cv.COLOR_RGB2BGR)
+        cv.imwrite('imgs/screen.png', input_image)
+
+        try:
+            object_matches = match_objects_in_input_image(input_image)
+        except cv.error as e:
+            print(f"Skipping Frame: Caught error {e}")
+            continue
+
+        successful_matches = {
+            query_name
+            for query_name, match in object_matches.items() if match is not None
+        }
+
+        print(f"Matched {successful_matches}")
+
+        sleep(1)
+
+
 if __name__ == '__main__':
-    COMMANDS = {'test': run_test_match_objects}
+    COMMANDS = {
+        'test': run_test_match_objects,
+        'test_screen': run_test_match_written_screenshot,
+        'bot': run_bot_service
+    }
 
     COMMANDS[sys.argv[1]]()
