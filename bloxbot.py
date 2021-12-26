@@ -107,9 +107,9 @@ def get_min_match_count_for_query(query):
 
 
 def plot_matches(query, input_image, input_keypoints, input_descriptors,
-                 good_matches, cluster_descriptor_indexes):
+                 good_matches, descriptor_indexes):
     cluster_input_keypoints = [
-        input_keypoints[index] for index in cluster_descriptor_indexes
+        input_keypoints[index] for index in descriptor_indexes
     ]
 
     src_pts = np.float32([
@@ -167,6 +167,10 @@ def match_objects_in_input_image(input_image):
     input_labels = input_meanshift.labels_
     input_labels_unique = np.unique(input_labels)
     input_n_clusters = len(input_labels_unique)
+    clustered_descriptor_indexes = [
+        np.where(input_meanshift.labels_ == i)[0]
+        for i in range(input_n_clusters)
+    ]
 
     if LOG_CLUSTER_MATCHES:
         print(f"number of estimated clusters : {input_n_clusters}\n")
@@ -174,17 +178,16 @@ def match_objects_in_input_image(input_image):
     object_matches = {}
 
     for query_name, query in QUERIES.items():
+        float_query_descriptors = np.float32(query['descriptors'])
+
         min_match_count = get_min_match_count_for_query(query)
 
         best_match_count, best_match = 0, None
 
-        for i in range(input_n_clusters):
-            # "cluster_descriptor_indexes" is a guess as what these actually are
-            cluster_descriptor_indexes, = np.where(input_meanshift.labels_ == i)
-
+        for descriptor_indexes in clustered_descriptor_indexes:
             matches = FLANN_MATCHER.knnMatch(
-                np.float32(query['descriptors']),
-                np.float32(input_descriptors[cluster_descriptor_indexes,]), 2)
+                float_query_descriptors,
+                np.float32(input_descriptors[descriptor_indexes,]), 2)
 
             # store all the good_matches matches as per Lowe's ratio test.
             good_matches = [
@@ -200,7 +203,7 @@ def match_objects_in_input_image(input_image):
                     )
                 if good_matches_count > best_match_count:
                     best_match_count = good_matches_count
-                    best_match = (good_matches, cluster_descriptor_indexes)
+                    best_match = (good_matches, descriptor_indexes)
             else:
                 if LOG_CLUSTER_MATCHES:
                     print(
@@ -210,9 +213,9 @@ def match_objects_in_input_image(input_image):
         object_matches[query_name] = best_match
 
         if best_match:
-            good_matches, cluster_descriptor_indexes = best_match
+            good_matches, descriptor_indexes = best_match
             plot_matches(query, input_image, input_keypoints, input_descriptors,
-                         good_matches, cluster_descriptor_indexes)
+                         good_matches, descriptor_indexes)
         else:
             print(f"{query_name} - No Match")
     return object_matches
