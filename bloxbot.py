@@ -327,7 +327,10 @@ def run_bot_service():
         try:
             detected_objects = detect_objects_in_input_image(input_image)
         except cv.error as e:
-            print(f"Skipping Frame: Caught error {e}")
+            print(f"Skipping Frame: Caught cv.error {e}")
+            continue
+        except Exception as e:
+            print(f"Skipping Frame: Caught exception {e}")
             continue
 
         print(f"Matched {tuple(detected_objects.keys())}")
