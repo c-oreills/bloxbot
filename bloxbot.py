@@ -3,7 +3,9 @@
 # Useful links
 # https://docs.opencv.org/4.x/dc/dc3/tutorial_py_matcher.html
 # https://stackoverflow.com/questions/42938149/opencv-feature-matching-multiple-objects
+# https://stackoverflow.com/questions/48414823/opencv-feature-matching-multiple-similar-objects-in-an-image/48420702
 
+import math
 import sys
 from time import sleep
 
@@ -14,36 +16,32 @@ from sklearn.cluster import MeanShift, estimate_bandwidth
 
 import cv
 
-# Order images aren't skewed by perspective, so match threshold can be higher
-ORDER_MIN_MATCH_COUNT = 30
-# Till images get skewed by perspective, so need more room for error
-TILL_MIN_MATCH_COUNT = 10
-# Till done has very little in the way of features, so needs even more lenience
-TILL_DONE_MIN_MATCH_COUNT = 5
+# Suppress scientific notation in NumPy printing
+np.set_printoptions(suppress=True)
 
+# Matching parameters for corner detection
+MIN_MATCH_COUNT = 10
 LOWE_MATCH_RATIO = 0.7
 
 # Logging/display configuration - set to True for more verbose output,
 # including visual displays of detected objects
 LOG_CLUSTER_MATCHES = False
+LOG_YAW_PITCH_ROLL = False
 DISPLAY_DETECTED_OBJECTS = False
 
-orb = cv.ORB_create(10000, 1.2, nlevels=8, edgeThreshold=5)
 
-QUERY_NAMES = (
-    # Order impages (use to parse order)
-    'order/sburg',
-    'order/dburg',
-    'order/fburg',
-    'order/fries',
-    'order/drink',
-    # Till images (use to serve order)
-    'till/sburg',
-    'till/dburg',
-    'till/fburg',
-    'till/fries',
-    'till/drink',
-    'till/done')
+def initialise_detector(detector_type):
+    assert detector_type in ('sift', 'orb')
+
+    if detector_type == 'sift':
+        return cv.SIFT_create()
+    if detector_type == 'orb':
+        return cv.ORB_create(10000, 1.2, nlevels=8, edgeThreshold=5)
+
+
+detector = initialise_detector('sift')
+
+QUERY_NAMES = ('sburg', 'dburg', 'fburg', 'fries', 'drink', 'done')
 
 
 def initialise_queries():
@@ -57,7 +55,7 @@ def initialise_queries():
     }
 
     for query_name, query in queries.items():
-        query_keypoints, query_descriptors = orb.detectAndCompute(
+        query_keypoints, query_descriptors = detector.detectAndCompute(
             query['image'], None)
         query.update(keypoints=query_keypoints, descriptors=query_descriptors)
 
@@ -67,34 +65,58 @@ def initialise_queries():
 QUERIES = initialise_queries()
 
 TEST_IMG_MATCHES = {
-    '1': ('order/sburg', 'order/fries', 'till/sburg', 'till/dburg',
-          'till/fburg', 'till/fries', 'till/drink', 'till/done'),
-    '2': ('order/fburg', 'till/sburg', 'till/dburg', 'till/fburg', 'till/fries',
-          'till/drink', 'till/done'),
-    '3': (
-        'order/fburg',
-        'order/fries',
-        'order/drink',
-        'till/sburg',
-        'till/dburg',
-        'till/fburg',
-        'till/fries',
-        'till/drink',
-        #'till/done'
-    ),
-    '4': ('order/sburg', 'order/fries', 'till/sburg', 'till/dburg',
-          'till/fburg', 'till/fries', 'till/drink', 'till/done'),
-    '5': ('order/dburg', 'order/fries', 'till/sburg', 'till/dburg',
-          'till/fburg', 'till/fries', 'till/drink', 'till/done'),
+    '1': {
+        'sburg': 2,
+        'dburg': 1,
+        'fburg': 1,
+        'fries': 2,
+        'drink': 1,
+        'done': 1
+    },
+    '2': {
+        'sburg': 1,
+        'dburg': 1,
+        'fburg': 2,
+        'fries': 1,
+        'drink': 1,
+        'done': 1
+    },
+    '3': {
+        'sburg': 1,
+        'dburg': 1,
+        'fburg': 2,
+        'fries': 2,
+        'drink': 2,
+        'done': 1
+    },
+    '4': {
+        'sburg': 2,
+        'dburg': 1,
+        'fburg': 1,
+        'fries': 2,
+        'drink': 1,
+        'done': 1
+    },
+    '5': {
+        'sburg': 1,
+        'dburg': 2,
+        'fburg': 1,
+        'fries': 2,
+        'drink': 1,
+        'done': 1
+    },
 }
 
-FLANN_INDEX_KDTREE = 0
-INDEX_PARAMS = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-SEARCH_PARAMS = dict(checks=50)
-FLANN_MATCHER = cv.FlannBasedMatcher(INDEX_PARAMS, SEARCH_PARAMS)
+BF_MATCHER = cv.BFMatcher()
 
 
 def create_meanshift(keypoints):
+    """Meanshifts split keypoints into clusters so that we can try to detect
+    multiple objects in a single image.
+    """
+    # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.MeanShift.html
+    # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.estimate_bandwidth.html
+
     x = np.array([keypoints[0].pt])
 
     for i in range(len(keypoints)):
@@ -109,19 +131,34 @@ def create_meanshift(keypoints):
     return ms
 
 
-def get_min_match_count_for_query(query):
-    if query['name'].startswith('order/'):
-        return ORDER_MIN_MATCH_COUNT
-    if query['name'] == 'till/done':
-        return TILL_DONE_MIN_MATCH_COUNT
-    if query['name'].startswith('till/'):
-        return TILL_MIN_MATCH_COUNT
-    raise ValueError('Unknown query type')
+def calculate_yaw_pitch_roll_from_homography(homography_matrix):
+    """Converts a homography rotation matrix to yaw/pitch/roll angles from
+    camera. Useful to discard detections which are angled too far from camera.
+    """
+    # Useful reference docs
+    # http://planning.cs.uiuc.edu/node103.html
+    # https://coderedirect.com/questions/83394/computing-camera-pose-with-homography-matrix-based-on-4-coplanar-points
+    # (Hilmi's answer, while not exactly what was needed, was useful)
+
+    R = homography_matrix
+
+    yaw = math.atan2(R[(1, 0)], R[(0, 0)])
+    pitch = math.atan2(-R[(2, 0)], math.hypot(R[(2, 1)], R[(2, 2)]))
+    roll = math.atan2(R[(2, 1)], R[(2, 2)])
+
+    if LOG_YAW_PITCH_ROLL:
+        print(f"yaw {yaw:f} pitch {pitch:f} roll {roll:f}")
+
+    return yaw, pitch, roll
 
 
 def display_detected_object(query, input_image, good_matches,
                             cluster_input_keypoints, M, mask):
-    matchesMask = mask.ravel().tolist()
+    """Opens a new matplotlib window to display a detected object and the
+    keypoint matches in an original image. Useful for debugging.
+    """
+    # Flattens array and coerces to list
+    matches_mask = mask.ravel().tolist()
 
     h, w = query['image'].shape
     pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1],
@@ -133,7 +170,7 @@ def display_detected_object(query, input_image, good_matches,
     draw_params = dict(
         matchColor=(0, 255, 0),  # draw matches in green color
         singlePointColor=None,
-        matchesMask=matchesMask,  # draw only inliers
+        matchesMask=matches_mask,  # draw only inliers
         flags=2)
 
     match_display_img = cv.drawMatches(query['image'], query['keypoints'],
@@ -145,6 +182,11 @@ def display_detected_object(query, input_image, good_matches,
 def locate_detected_object_centre(query, input_image, input_keypoints,
                                   input_descriptors, good_matches,
                                   descriptor_indexes):
+    # Useful docs on using and understanding homography
+    # https://docs.opencv.org/3.4/d1/de0/tutorial_py_feature_homography.html
+    # https://docs.opencv.org/3.4/d9/dab/tutorial_homography.html
+    # https://www.pythonpool.com/cv2-findhomography/
+
     cluster_input_keypoints = [
         input_keypoints[index] for index in descriptor_indexes
     ]
@@ -156,14 +198,28 @@ def locate_detected_object_centre(query, input_image, input_keypoints,
         cluster_input_keypoints[m.trainIdx].pt for m in good_matches
     ]).reshape(-1, 1, 2)
 
-    M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 2)
+    homography_matrix, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC)
 
-    if M is None:
+    if homography_matrix is None:
+        return None
+
+    yaw, pitch, roll = calculate_yaw_pitch_roll_from_homography(
+        homography_matrix)
+
+    # Discard any homography where the image appears to have been reversed or
+    # the angle from the camera is too steep.
+    # The boundary condition should be `abs(angle) > pi/2` but for some reason
+    # the drink was sometimes reporting a "reversed" yaw of 1.9 despite
+    # appearing correct in displayed homographies, so experimentally set to 2
+    if any((abs(angle) > 2 for angle in (yaw, pitch, roll))):
+        if LOG_YAW_PITCH_ROLL:
+            print("Dicard detected object due to yaw/pitch/roll angle")
         return None
 
     if DISPLAY_DETECTED_OBJECTS:
         display_detected_object(query, input_image, good_matches,
-                                cluster_input_keypoints, M, mask)
+                                cluster_input_keypoints, homography_matrix,
+                                mask)
 
     centre_pt, = np.average(dst_pts, axis=0)
 
@@ -171,7 +227,8 @@ def locate_detected_object_centre(query, input_image, input_keypoints,
 
 
 def detect_objects_in_input_image(input_image):
-    input_keypoints, input_descriptors = orb.detectAndCompute(input_image, None)
+    input_keypoints, input_descriptors = detector.detectAndCompute(
+        input_image, None)
 
     input_meanshift = create_meanshift(input_keypoints)
 
@@ -189,19 +246,16 @@ def detect_objects_in_input_image(input_image):
     if LOG_CLUSTER_MATCHES:
         print(f"number of estimated clusters : {input_n_clusters}\n")
 
-    detected_object_centres = {}
+    detected_objects = {}
 
     for query_name, query in QUERIES.items():
         float_query_descriptors = np.float32(query['descriptors'])
 
-        min_match_count = get_min_match_count_for_query(query)
-
-        best_match_count, best_match = 0, None
+        query_detected_objects = []
 
         for descriptor_indexes in clustered_descriptor_indexes:
-            matches = FLANN_MATCHER.knnMatch(
-                float_query_descriptors,
-                np.float32(input_descriptors[descriptor_indexes,]), 2)
+            matches = BF_MATCHER.knnMatch(
+                query['descriptors'], input_descriptors[descriptor_indexes,], 2)
 
             # store all the good_matches matches as per Lowe's ratio test.
             good_matches = [
@@ -210,58 +264,58 @@ def detect_objects_in_input_image(input_image):
             ]
 
             good_matches_count = len(good_matches)
-            if good_matches_count >= min_match_count:
+            if good_matches_count >= MIN_MATCH_COUNT:
                 if LOG_CLUSTER_MATCHES:
-                    print(
-                        f"{query_name} - Match: "
-                        f"{len(good_matches)}/{min_match_count}"
-                    )
-                if good_matches_count > best_match_count:
-                    best_match_count = good_matches_count
-                    best_match = (good_matches, descriptor_indexes)
-            else:
-                if LOG_CLUSTER_MATCHES:
-                    print(
-                        f"{query_name} - No Match: "
-                        f"{len(good_matches)}/{min_match_count}"
-                    )
+                    print(f"{query_name} - Match: "
+                          f"{len(good_matches)}/{MIN_MATCH_COUNT}")
 
-        if best_match:
-            good_matches, descriptor_indexes = best_match
-            detected_object_centre = locate_detected_object_centre(
-                query, input_image, input_keypoints, input_descriptors,
-                good_matches, descriptor_indexes)
-            if detected_object_centre is not None:
-                detected_object_centres[query_name] = detected_object_centre
-                print(
-                    f"{query_name} - Match at {detected_object_centre}: "
-                    f"{len(good_matches)}/{min_match_count}"
-                )
+                detected_object_centre = locate_detected_object_centre(
+                    query, input_image, input_keypoints, input_descriptors,
+                    good_matches, descriptor_indexes)
+
+                if detected_object_centre is not None:
+                    query_detected_objects.append(
+                        (good_matches_count, detected_object_centre))
+                    print(f"{query_name} - Match at {detected_object_centre}: "
+                          f"{len(good_matches)}/{MIN_MATCH_COUNT}")
+                else:
+                    print(f"{query_name} - Match, but no homography "
+                          f"{len(good_matches)}/{MIN_MATCH_COUNT}")
             else:
-                print(f"{query_name} - Could not find centre, no homography")
+                if LOG_CLUSTER_MATCHES:
+                    print(f"{query_name} - No Match: "
+                          f"{len(good_matches)}/{MIN_MATCH_COUNT}")
+
+        if query_detected_objects:
+            detected_objects[query_name] = tuple(
+                sorted(query_detected_objects, key=lambda qdo: qdo[0]))
         else:
             print(f"{query_name} - No Match")
 
-    return detected_object_centres
+    return detected_objects
 
 
 def run_test_match_objects():
-    for img_name, expected_match_names in TEST_IMG_MATCHES.items():
+    for img_name, expected_object_counts in TEST_IMG_MATCHES.items():
         input_img = cv.imread(f'imgs/test/{img_name}.png', 0)
-        object_matches = detect_objects_in_input_image(input_img)
-        actual_match_names = {
-            query_name
-            for query_name, match in object_matches.items() if match is not None
+        detected_objects = detect_objects_in_input_image(input_img)
+
+        actual_object_counts = {
+            object_name: len(detections)
+            for object_name, detections in detected_objects.items()
         }
 
-        assert set(
-            expected_match_names
-        ) == actual_match_names, f"test img {img_name}; {expected_match_names} != {actual_match_names}"
+        assert expected_object_counts == actual_object_counts, \
+            f"""test img {img_name}:
+            expected {expected_object_counts}
+            actual   {actual_object_counts}"""
 
 
 def run_test_match_written_screenshot():
     input_image = cv.imread('imgs/screen.png', 0)
-    object_matches = detect_objects_in_input_image(input_image)
+    detected_objects = detect_objects_in_input_image(input_image)
+
+    print(f"Matched {tuple(detected_objects.keys())}")
 
 
 def run_bot_service():
@@ -271,12 +325,12 @@ def run_bot_service():
         cv.imwrite('imgs/screen.png', input_image)
 
         try:
-            detected_object_centres = detect_objects_in_input_image(input_image)
+            detected_objects = detect_objects_in_input_image(input_image)
         except cv.error as e:
             print(f"Skipping Frame: Caught error {e}")
             continue
 
-        print(f"Matched {tuple(detected_object_centres.keys())}")
+        print(f"Matched {tuple(detected_objects.keys())}")
 
         sleep(1)
 
