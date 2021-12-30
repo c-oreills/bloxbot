@@ -252,8 +252,6 @@ def detect_objects_in_input_image(input_image):
     detected_objects = {}
 
     for query_name, query in QUERIES.items():
-        float_query_descriptors = np.float32(query['descriptors'])
-
         query_detected_objects = []
 
         for descriptor_indexes in clustered_descriptor_indexes:
