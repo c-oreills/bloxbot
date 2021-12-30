@@ -45,9 +45,9 @@ QUERY_DISPLAY_NAMES = {
     'sburg': 's🍔',
     'dburg': 'd🍔',
     'fburg': 'f🍔',
-    'fries': '🍟',
-    'drink': '🥛',
-    'done': '✅'
+    'fries': ' 🍟',
+    'drink': ' 🥛',
+    'done': ' ✅'
 }
 
 
