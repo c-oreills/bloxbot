@@ -187,8 +187,7 @@ def display_detected_object(query, input_image, good_matches,
 
 
 def locate_detected_object_centre(query, input_image, input_keypoints,
-                                  input_descriptors, good_matches,
-                                  descriptor_indexes):
+                                  good_matches, descriptor_indexes):
     # Useful docs on using and understanding homography
     # https://docs.opencv.org/3.4/d1/de0/tutorial_py_feature_homography.html
     # https://docs.opencv.org/3.4/d9/dab/tutorial_homography.html
@@ -270,8 +269,8 @@ def detect_objects_in_input_image(input_image):
             good_matches_count = len(good_matches)
             if good_matches_count >= MIN_MATCH_COUNT:
                 detected_object_centre = locate_detected_object_centre(
-                    query, input_image, input_keypoints, input_descriptors,
-                    good_matches, descriptor_indexes)
+                    query, input_image, input_keypoints, good_matches,
+                    descriptor_indexes)
 
                 if detected_object_centre is not None:
                     query_detected_objects.append(
