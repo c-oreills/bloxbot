@@ -276,7 +276,7 @@ def detect_objects_in_input_image(input_image):
                     print(f"{query_name} - Match at {detected_object_centre}: "
                           f"{len(good_matches)}/{MIN_MATCH_COUNT}")
                 else:
-                    print(f"{query_name} - Match, but no homography "
+                    print(f"{query_name} - Match, but no/extreme homography: "
                           f"{len(good_matches)}/{MIN_MATCH_COUNT}")
 
         if query_detected_objects:
