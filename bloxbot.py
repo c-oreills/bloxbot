@@ -42,13 +42,21 @@ def initialise_detector(detector_type):
 detector = initialise_detector('sift')
 
 QUERY_NAMES = ('sburg', 'dburg', 'fburg', 'fries', 'drink', 'done')
+QUERY_DISPLAY_NAMES = {
+    'sburg': 's🍔',
+    'dburg': 'd🍔',
+    'fburg': 'f🍔',
+    'fries': '🍟',
+    'drink': '🥛',
+    'done': '✅'
+}
 
 
 def initialise_queries():
     # Initialised in a function so as not to pollute the global scope
     queries = {
-        query_name: {
-            'name': query_name,
+        QUERY_DISPLAY_NAMES[query_name]: {
+            'name': QUERY_DISPLAY_NAMES[query_name],
             'image': cv.imread(f'imgs/{query_name}.png', 0)
         }
         for query_name in QUERY_NAMES
@@ -304,6 +312,11 @@ def get_detected_object_counts(detected_objects):
 
 def run_test_match_objects():
     for img_name, expected_object_counts in TEST_IMG_MATCHES.items():
+        expected_object_counts = {
+            QUERY_DISPLAY_NAMES[query_name]: count
+            for query_name, count in expected_object_counts.items()
+        }
+
         input_img = cv.imread(f'imgs/test/{img_name}.png', 0)
         detected_objects = detect_objects_in_input_image(input_img)
 
