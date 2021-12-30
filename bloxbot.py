@@ -25,7 +25,6 @@ LOWE_MATCH_RATIO = 0.7
 
 # Logging/display configuration - set to True for more verbose output,
 # including visual displays of detected objects
-LOG_CLUSTER_MATCHES = False
 LOG_YAW_PITCH_ROLL = False
 DISPLAY_DETECTED_OBJECTS = False
 
@@ -251,9 +250,6 @@ def detect_objects_in_input_image(input_image):
         for i in range(input_n_clusters)
     ]
 
-    if LOG_CLUSTER_MATCHES:
-        print(f"number of estimated clusters : {input_n_clusters}\n")
-
     detected_objects = {}
 
     for query_name, query in QUERIES.items():
@@ -273,10 +269,6 @@ def detect_objects_in_input_image(input_image):
 
             good_matches_count = len(good_matches)
             if good_matches_count >= MIN_MATCH_COUNT:
-                if LOG_CLUSTER_MATCHES:
-                    print(f"{query_name} - Match: "
-                          f"{len(good_matches)}/{MIN_MATCH_COUNT}")
-
                 detected_object_centre = locate_detected_object_centre(
                     query, input_image, input_keypoints, input_descriptors,
                     good_matches, descriptor_indexes)
@@ -288,10 +280,6 @@ def detect_objects_in_input_image(input_image):
                           f"{len(good_matches)}/{MIN_MATCH_COUNT}")
                 else:
                     print(f"{query_name} - Match, but no homography "
-                          f"{len(good_matches)}/{MIN_MATCH_COUNT}")
-            else:
-                if LOG_CLUSTER_MATCHES:
-                    print(f"{query_name} - No Match: "
                           f"{len(good_matches)}/{MIN_MATCH_COUNT}")
 
         if query_detected_objects:
