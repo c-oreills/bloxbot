@@ -61,7 +61,7 @@ def initialise_queries():
         for query_name in QUERY_NAMES
     }
 
-    for query_name, query in queries.items():
+    for query in queries.values():
         query_keypoints, query_descriptors = detector.detectAndCompute(
             query['image'], None)
         query.update(keypoints=query_keypoints, descriptors=query_descriptors)
