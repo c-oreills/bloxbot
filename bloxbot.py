@@ -295,15 +295,19 @@ def detect_objects_in_input_image(input_image):
     return detected_objects
 
 
+def get_detected_object_counts(detected_objects):
+    return {
+        object_name: len(detections)
+        for object_name, detections in detected_objects.items()
+    }
+
+
 def run_test_match_objects():
     for img_name, expected_object_counts in TEST_IMG_MATCHES.items():
         input_img = cv.imread(f'imgs/test/{img_name}.png', 0)
         detected_objects = detect_objects_in_input_image(input_img)
 
-        actual_object_counts = {
-            object_name: len(detections)
-            for object_name, detections in detected_objects.items()
-        }
+        actual_object_counts = get_detected_object_counts(detected_objects)
 
         assert expected_object_counts == actual_object_counts, \
             f"""test img {img_name}:
@@ -333,7 +337,7 @@ def run_bot_service():
             print(f"Skipping Frame: Caught exception {e}")
             continue
 
-        print(f"Matched {tuple(detected_objects.keys())}")
+        print(f"Matched {get_detected_object_counts(detected_objects)}")
 
         sleep(1)
 
