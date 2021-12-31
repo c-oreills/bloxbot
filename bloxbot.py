@@ -99,6 +99,10 @@ TEST_IMG_ORDERS = {
         'fburg',
         'fries',
     },
+    '7': {
+        'sburg',
+        'fries',
+    },
 }
 
 BF_MATCHER = cv.BFMatcher()
@@ -116,14 +120,12 @@ def get_order_and_till_sub_images(input_image):
     def get_bounding_rect_of_largest_contour(hsv_image, hsv_lower, hsv_upper):
         mask = cv.inRange(hsv_image, hsv_lower, hsv_upper)
 
-
         kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
         opening = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel, iterations=1)
 
         contours, _ = cv.findContours(opening, cv.RETR_EXTERNAL,
                                       cv.CHAIN_APPROX_SIMPLE)
-
-        _, biggest_contour = max(((cv.contourArea(c), c) for c in contours))
+        biggest_contour = max(contours, key=cv.contourArea)
 
         if DISPLAY_SUB_IMAGES_MASK_OPENING:
             cv.imshow('hsv_image', hsv_image)
