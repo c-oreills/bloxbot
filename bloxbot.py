@@ -145,7 +145,7 @@ def get_order_and_till_sub_images(input_image):
     if DISPLAY_SUB_IMAGES:
         cv.imshow('order', order_image)
         cv.imshow('till', till_image)
-        cv.waitKey(1)
+        cv.waitKey()
 
     return order_image, till_image
 
