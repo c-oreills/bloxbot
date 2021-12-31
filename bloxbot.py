@@ -5,6 +5,7 @@
 # https://stackoverflow.com/questions/42938149/opencv-feature-matching-multiple-objects
 # https://stackoverflow.com/questions/48414823/opencv-feature-matching-multiple-similar-objects-in-an-image/48420702
 
+from collections import namedtuple
 import math
 import sys
 from time import sleep
@@ -186,8 +187,12 @@ def display_detected_object(query, input_image, good_matches,
     plt.imshow(match_display_img, 'gray'), plt.show()
 
 
-def locate_detected_object_centre(query, input_image, input_keypoints,
-                                  good_matches, descriptor_indexes):
+DetectedObject = namedtuple('DetectedObject',
+                            'query, centre_pt, homography_matrix')
+
+
+def locate_detected_object(query, input_image, input_keypoints, good_matches,
+                           descriptor_indexes):
     # Useful docs on using and understanding homography
     # https://docs.opencv.org/3.4/d1/de0/tutorial_py_feature_homography.html
     # https://docs.opencv.org/3.4/d9/dab/tutorial_homography.html
@@ -229,7 +234,7 @@ def locate_detected_object_centre(query, input_image, input_keypoints,
 
     centre_pt, = np.average(dst_pts, axis=0)
 
-    return centre_pt
+    return DetectedObject(query, centre_pt, homography_matrix)
 
 
 def detect_objects_in_input_image(input_image):
@@ -266,15 +271,16 @@ def detect_objects_in_input_image(input_image):
 
             good_matches_count = len(good_matches)
             if good_matches_count >= MIN_MATCH_COUNT:
-                detected_object_centre = locate_detected_object_centre(
+                detected_object = locate_detected_object(
                     query, input_image, input_keypoints, good_matches,
                     descriptor_indexes)
 
-                if detected_object_centre is not None:
+                if detected_object is not None:
                     query_detected_objects.append(
-                        (good_matches_count, detected_object_centre))
-                    print(f"{query_name} - Match at {detected_object_centre}: "
-                          f"{len(good_matches)}/{MIN_MATCH_COUNT}")
+                        (good_matches_count, detected_object))
+                    print(
+                        f"{query_name} - Match at {detected_object.centre_pt}: "
+                        f"{len(good_matches)}/{MIN_MATCH_COUNT}")
                 else:
                     print(f"{query_name} - Match, but no/extreme homography: "
                           f"{len(good_matches)}/{MIN_MATCH_COUNT}")
