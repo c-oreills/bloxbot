@@ -26,6 +26,7 @@ LOWE_MATCH_RATIO = 0.7
 # Logging/display configuration - set to True for more verbose output,
 # including visual displays of detected objects
 LOG_YAW_PITCH_ROLL = False
+DISPLAY_SUB_IMAGES_MASK_OPENING = False
 DISPLAY_SUB_IMAGES = False
 DISPLAY_DETECTED_OBJECTS = False
 
@@ -114,6 +115,7 @@ def get_order_and_till_sub_images(input_image):
     def get_bounding_rect_of_largest_contour(hsv_image, hsv_lower, hsv_upper):
         mask = cv.inRange(hsv_image, hsv_lower, hsv_upper)
 
+
         kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
         opening = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel, iterations=1)
 
@@ -121,6 +123,12 @@ def get_order_and_till_sub_images(input_image):
                                       cv.CHAIN_APPROX_SIMPLE)
 
         _, biggest_contour = max(((cv.contourArea(c), c) for c in contours))
+
+        if DISPLAY_SUB_IMAGES_MASK_OPENING:
+            cv.imshow('hsv_image', hsv_image)
+            cv.imshow('mask', mask)
+            cv.imshow('opening', opening)
+            cv.waitKey()
 
         return cv.boundingRect(biggest_contour)
 
@@ -133,7 +141,7 @@ def get_order_and_till_sub_images(input_image):
     order_bottom = order_top + order_height
 
     till_white_lower = np.array([0, 0, 170], dtype="uint8")
-    till_white_upper = np.array([0, 0, 205], dtype="uint8")
+    till_white_upper = np.array([0, 0, 240], dtype="uint8")
 
     # Assume that the till is always under the bottom of the order
     till_right, till_top, till_width, till_height = get_bounding_rect_of_largest_contour(
