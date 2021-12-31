@@ -8,6 +8,7 @@
 from collections import namedtuple
 import math
 import sys
+from traceback import print_exc
 from time import sleep
 
 import numpy as np
@@ -350,6 +351,7 @@ def run_bot_service(args):
             continue
         except Exception as e:
             print(f"Skipping Frame: Caught exception {e}")
+            print_exc()
             continue
 
 
