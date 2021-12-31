@@ -13,7 +13,6 @@ from time import sleep
 import numpy as np
 import pyautogui
 from matplotlib import pyplot as plt
-from sklearn.cluster import MeanShift, estimate_bandwidth
 
 import cv
 
@@ -27,6 +26,7 @@ LOWE_MATCH_RATIO = 0.7
 # Logging/display configuration - set to True for more verbose output,
 # including visual displays of detected objects
 LOG_YAW_PITCH_ROLL = False
+DISPLAY_SUB_IMAGES = False
 DISPLAY_DETECTED_OBJECTS = False
 
 
@@ -72,71 +72,78 @@ def initialise_queries():
 
 QUERIES = initialise_queries()
 
-TEST_IMG_MATCHES = {
+TEST_IMG_ORDERS = {
     '1': {
-        'sburg': 2,
-        'dburg': 1,
-        'fburg': 1,
-        'fries': 2,
-        'drink': 1,
-        'done': 1
+        'sburg',
+        'fries',
     },
     '2': {
-        'sburg': 1,
-        'dburg': 1,
-        'fburg': 2,
-        'fries': 1,
-        'drink': 1,
-        'done': 1
+        'fburg',
     },
     '3': {
-        'sburg': 1,
-        'dburg': 1,
-        'fburg': 2,
-        'fries': 2,
-        'drink': 2,
-        'done': 1
+        'fburg',
+        'fries',
+        'drink',
     },
     '4': {
-        'sburg': 2,
-        'dburg': 1,
-        'fburg': 1,
-        'fries': 2,
-        'drink': 1,
-        'done': 1
+        'sburg',
+        'fries',
     },
     '5': {
-        'sburg': 1,
-        'dburg': 2,
-        'fburg': 1,
-        'fries': 2,
-        'drink': 1,
-        'done': 1
+        'dburg',
+        'fries',
     },
 }
 
 BF_MATCHER = cv.BFMatcher()
 
 
-def create_meanshift(keypoints):
-    """Meanshifts split keypoints into clusters so that we can try to detect
-    multiple objects in a single image.
-    """
-    # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.MeanShift.html
-    # https://scikit-learn.org/stable/modules/generated/sklearn.cluster.estimate_bandwidth.html
+def get_order_and_till_sub_images(input_image):
+    # https://stackoverflow.com/questions/57282935/how-to-detect-area-of-pixels-with-the-same-color-using-opencv#57300889
+    # https://docs.opencv.org/4.x/d9/d61/tutorial_py_morphological_ops.html
+    # https://docs.opencv.org/3.4/da/d0c/tutorial_bounding_rects_circles.html
 
-    x = np.array([keypoints[0].pt])
+    hsv_image = cv.cvtColor(input_image.copy(), cv.COLOR_BGR2HSV)
 
-    for i in range(len(keypoints)):
-        x = np.append(x, [keypoints[i].pt], axis=0)
+    white = np.array([0, 0, 255], dtype="uint8")
 
-    x = x[1:len(x)]
+    def get_bounding_rect_of_largest_contour(hsv_image, hsv_lower, hsv_upper):
+        mask = cv.inRange(hsv_image, hsv_lower, hsv_upper)
 
-    bandwidth = estimate_bandwidth(x, quantile=0.1, n_samples=500)
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
+        opening = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel, iterations=1)
 
-    ms = MeanShift(bandwidth=bandwidth, bin_seeding=True, cluster_all=True)
-    ms.fit(x)
-    return ms
+        contours, _ = cv.findContours(opening, cv.RETR_EXTERNAL,
+                                      cv.CHAIN_APPROX_SIMPLE)
+
+        _, biggest_contour = max(((cv.contourArea(c), c) for c in contours))
+
+        return cv.boundingRect(biggest_contour)
+
+    order_right, order_top, order_width, order_height = get_bounding_rect_of_largest_contour(
+        hsv_image, white, white)
+
+    order_image = input_image[order_top:order_top + order_height,
+                              order_right:order_right + order_width]
+
+    order_bottom = order_top + order_height
+
+    till_white_lower = np.array([0, 0, 170], dtype="uint8")
+    till_white_upper = np.array([0, 0, 205], dtype="uint8")
+
+    # Assume that the till is always under the bottom of the order
+    till_right, till_top, till_width, till_height = get_bounding_rect_of_largest_contour(
+        hsv_image[order_bottom:, :], till_white_lower, till_white_upper)
+
+    till_image = input_image[order_bottom + till_top:order_bottom + till_top +
+                             till_height, till_right:till_right + till_width]
+
+    if DISPLAY_SUB_IMAGES:
+        cv.imshow('order', order_image)
+        cv.imshow('till', till_image)
+        cv.waitKey(1)
+
+    return order_image, till_image
 
 
 def calculate_yaw_pitch_roll_from_homography(homography_matrix):
@@ -191,23 +198,17 @@ DetectedObject = namedtuple('DetectedObject',
                             'query, centre_pt, homography_matrix')
 
 
-def locate_detected_object(query, input_image, input_keypoints, good_matches,
-                           descriptor_indexes):
+def locate_detected_object(query, input_image, input_keypoints, good_matches):
     # Useful docs on using and understanding homography
     # https://docs.opencv.org/3.4/d1/de0/tutorial_py_feature_homography.html
     # https://docs.opencv.org/3.4/d9/dab/tutorial_homography.html
     # https://www.pythonpool.com/cv2-findhomography/
 
-    cluster_input_keypoints = [
-        input_keypoints[index] for index in descriptor_indexes
-    ]
-
     src_pts = np.float32([
         query['keypoints'][m.queryIdx].pt for m in good_matches
     ]).reshape(-1, 1, 2)
-    dst_pts = np.float32([
-        cluster_input_keypoints[m.trainIdx].pt for m in good_matches
-    ]).reshape(-1, 1, 2)
+    dst_pts = np.float32([input_keypoints[m.trainIdx].pt
+                          for m in good_matches]).reshape(-1, 1, 2)
 
     homography_matrix, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC)
 
@@ -237,103 +238,97 @@ def locate_detected_object(query, input_image, input_keypoints, good_matches,
     return DetectedObject(query, centre_pt, homography_matrix)
 
 
-def detect_objects_in_input_image(input_image):
+def detect_objects_in_image(input_image):
     input_keypoints, input_descriptors = detector.detectAndCompute(
         input_image, None)
-
-    input_meanshift = create_meanshift(input_keypoints)
-
-    # TODO unused, look up
-    # cluster_centers = ms.cluster_centers_
-
-    input_labels = input_meanshift.labels_
-    input_labels_unique = np.unique(input_labels)
-    input_n_clusters = len(input_labels_unique)
-    clustered_descriptor_indexes = [
-        np.where(input_meanshift.labels_ == i)[0]
-        for i in range(input_n_clusters)
-    ]
 
     detected_objects = {}
 
     for query_name, query in QUERIES.items():
-        query_detected_objects = []
+        matches = BF_MATCHER.knnMatch(query['descriptors'], input_descriptors,
+                                      2)
 
-        for descriptor_indexes in clustered_descriptor_indexes:
-            matches = BF_MATCHER.knnMatch(
-                query['descriptors'], input_descriptors[descriptor_indexes,], 2)
+        # store all the good_matches matches as per Lowe's ratio test.
+        good_matches = [
+            m for (m, n) in matches
+            if m.distance < LOWE_MATCH_RATIO * n.distance
+        ]
 
-            # store all the good_matches matches as per Lowe's ratio test.
-            good_matches = [
-                m for (m, n) in matches
-                if m.distance < LOWE_MATCH_RATIO * n.distance
-            ]
-
-            good_matches_count = len(good_matches)
-            if good_matches_count >= MIN_MATCH_COUNT:
-                detected_object = locate_detected_object(
-                    query, input_image, input_keypoints, good_matches,
-                    descriptor_indexes)
-
-                if detected_object is not None:
-                    query_detected_objects.append(
-                        (good_matches_count, detected_object))
-                    print(
-                        f"{query_name} - Match at {detected_object.centre_pt}: "
-                        f"{len(good_matches)}/{MIN_MATCH_COUNT}")
-                else:
-                    print(f"{query_name} - Match, but no/extreme homography: "
-                          f"{len(good_matches)}/{MIN_MATCH_COUNT}")
-
-        if query_detected_objects:
-            detected_objects[query_name] = tuple(
-                sorted(query_detected_objects, key=lambda qdo: qdo[0]))
-        else:
+        good_matches_count = len(good_matches)
+        if good_matches_count < MIN_MATCH_COUNT:
             print(f"{query_name} - No Match")
+            continue
+
+        detected_object = locate_detected_object(query, input_image,
+                                                 input_keypoints, good_matches)
+
+        if detected_object is not None:
+            detected_objects[query_name] = detected_object
+            print(f"{query_name} - Match at {detected_object.centre_pt}: "
+                  f"{len(good_matches)}/{MIN_MATCH_COUNT}")
+        else:
+            print(f"{query_name} - Match, but no/extreme homography: "
+                  f"{len(good_matches)}/{MIN_MATCH_COUNT}")
 
     return detected_objects
 
 
-def get_detected_object_counts(detected_objects):
-    return {
-        object_name: len(detections)
-        for object_name, detections in detected_objects.items()
-    }
-
-
-def run_test_match_objects():
-    for img_name, expected_object_counts in TEST_IMG_MATCHES.items():
-        expected_object_counts = {
-            QUERY_DISPLAY_NAMES[query_name]: count
-            for query_name, count in expected_object_counts.items()
+def run_test_detect_objects():
+    for img_name, expected_order in TEST_IMG_ORDERS.items():
+        expected_order = {
+            QUERY_DISPLAY_NAMES[query_name]
+            for query_name in expected_order
         }
 
-        input_img = cv.imread(f'imgs/test/{img_name}.png', 0)
-        detected_objects = detect_objects_in_input_image(input_img)
+        input_image = cv.imread(f'imgs/test/{img_name}.png', 0)
 
-        actual_object_counts = get_detected_object_counts(detected_objects)
+        input_image = cv.cvtColor(input_image, cv.COLOR_RGB2BGR)
+        order_image, till_image = get_order_and_till_sub_images(input_image)
 
-        assert expected_object_counts == actual_object_counts, \
+        order_detected_objects = detect_objects_in_image(order_image)
+        actual_order = order_detected_objects.keys()
+
+        assert expected_order == actual_order, \
             f"""test img {img_name}:
-            expected {expected_object_counts}
-            actual   {actual_object_counts}"""
+            expected {expected_order}
+            actual   {actual_order}"""
+
+        till_detected_objects = detect_objects_in_image(till_image)
+        actual_till = till_detected_objects.keys()
+
+        expected_till = QUERY_DISPLAY_NAMES.values()
+
+        assert set(expected_till) == set(actual_till), \
+            f"""test img {img_name}:
+            expected {expected_till}
+            actual   {actual_till}"""
 
 
 def run_test_match_written_screenshot():
     input_image = cv.imread('imgs/screen.png', 0)
-    detected_objects = detect_objects_in_input_image(input_image)
+    detected_objects = detect_objects_in_image(input_image)
 
     print(f"Matched {tuple(detected_objects.keys())}")
 
 
 def run_bot_service():
     while True:
+        sleep(1)
+
         input_image = pyautogui.screenshot()
         input_image = cv.cvtColor(np.array(input_image), cv.COLOR_RGB2BGR)
         cv.imwrite('imgs/screen.png', input_image)
 
         try:
-            detected_objects = detect_objects_in_input_image(input_image)
+            order_image, till_image = get_order_and_till_sub_images(input_image)
+
+            till_detected_objects = detect_objects_in_image(till_image)
+            print(f"Till: {till_detected_objects.keys()}")
+
+            order_detected_objects = detect_objects_in_image(order_image)
+            print(f"Order: {order_detected_objects.keys()}")
+
+            print()
         except cv.error as e:
             print(f"Skipping Frame: Caught cv.error {e}")
             continue
@@ -341,14 +336,10 @@ def run_bot_service():
             print(f"Skipping Frame: Caught exception {e}")
             continue
 
-        print(f"Matched {get_detected_object_counts(detected_objects)}")
-
-        sleep(1)
-
 
 if __name__ == '__main__':
     COMMANDS = {
-        'test': run_test_match_objects,
+        'test': run_test_detect_objects,
         'test_screen': run_test_match_written_screenshot,
         'bot': run_bot_service
     }
