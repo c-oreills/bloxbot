@@ -93,6 +93,10 @@ TEST_IMG_ORDERS = {
         'dburg',
         'fries',
     },
+    '6': {
+        'fburg',
+        'fries',
+    },
 }
 
 BF_MATCHER = cv.BFMatcher()
@@ -273,8 +277,12 @@ def detect_objects_in_image(input_image):
     return detected_objects
 
 
-def run_test_detect_objects():
+def run_test_detect_objects(args):
     for img_name, expected_order in TEST_IMG_ORDERS.items():
+        # Allow selective testing of individual cases
+        if args and img_name not in args:
+            continue
+
         expected_order = {
             QUERY_DISPLAY_NAMES[query_name]
             for query_name in expected_order
@@ -304,14 +312,14 @@ def run_test_detect_objects():
             actual   {actual_till}"""
 
 
-def run_test_match_written_screenshot():
+def run_test_match_written_screenshot(args):
     input_image = cv.imread('imgs/screen.png', 0)
     detected_objects = detect_objects_in_image(input_image)
 
     print(f"Matched {tuple(detected_objects.keys())}")
 
 
-def run_bot_service():
+def run_bot_service(args):
     while True:
         sleep(1)
 
@@ -344,4 +352,4 @@ if __name__ == '__main__':
         'bot': run_bot_service
     }
 
-    COMMANDS[sys.argv[1]]()
+    COMMANDS[sys.argv[1]](sys.argv[2:])
