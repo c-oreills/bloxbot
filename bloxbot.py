@@ -151,11 +151,11 @@ def get_order_and_till_sub_images(input_image):
 
         return cv.boundingRect(biggest_contour)
 
-    order_right, order_top, order_width, order_height = get_bounding_rect_of_largest_contour(
+    order_left, order_top, order_width, order_height = get_bounding_rect_of_largest_contour(
         hsv_image, white, white)
 
     order_image = input_image[order_top:order_top + order_height,
-                              order_right:order_right + order_width]
+                              order_left:order_left + order_width]
 
     order_bottom = order_top + order_height
 
@@ -163,11 +163,11 @@ def get_order_and_till_sub_images(input_image):
     till_white_upper = np.array([0, 0, 240], dtype="uint8")
 
     # Assume that the till is always under the bottom of the order
-    till_right, till_top, till_width, till_height = get_bounding_rect_of_largest_contour(
+    till_left, till_top, till_width, till_height = get_bounding_rect_of_largest_contour(
         hsv_image[order_bottom:, :], till_white_lower, till_white_upper)
 
     till_image = input_image[order_bottom + till_top:order_bottom + till_top +
-                             till_height, till_right:till_right + till_width]
+                             till_height, till_left:till_left + till_width]
 
     if DISPLAY_SUB_IMAGES:
         cv.imshow('order', order_image)
