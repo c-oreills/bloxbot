@@ -21,7 +21,7 @@ import cv
 np.set_printoptions(suppress=True)
 
 # Matching parameters for corner detection
-MIN_MATCH_COUNT = 10
+MIN_MATCH_COUNT = 8
 LOWE_MATCH_RATIO = 0.7
 
 # Logging/display configuration - set to True for more verbose output,
@@ -103,6 +103,17 @@ TEST_IMG_ORDERS = {
         'sburg',
         'fries',
     },
+    '8': {
+        'fburg',
+        'drink',
+    },
+    '9': {
+        'dburg',
+        'drink',
+    },
+    '10': {
+        'dburg',
+    },
 }
 
 BF_MATCHER = cv.BFMatcher()
@@ -161,6 +172,72 @@ def get_order_and_till_sub_images(input_image):
     return order_image, till_image
 
 
+def segment_order_sub_image_and_detect_objects(order_image):
+    _, order_width, _ = order_image.shape
+
+    hsv_image = cv.cvtColor(order_image.copy(), cv.COLOR_BGR2HSV)
+
+    mask = cv.inRange(hsv_image, (0, 0, 0), (255, 255, 254))
+
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
+    opening = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel, iterations=1)
+
+    if DISPLAY_SUB_IMAGES_MASK_OPENING:
+        cv.imshow('opening', opening)
+        cv.waitKey()
+
+    contours, _ = cv.findContours(opening, cv.RETR_EXTERNAL,
+                                  cv.CHAIN_APPROX_SIMPLE)
+
+    detected_objects = {}
+
+    prev_contour_area = None
+    contours_and_areas = ((contour, cv.contourArea(contour))
+                          for contour in contours)
+
+    # Sort contours by area, largest first
+    for contour, contour_area in sorted(contours_and_areas,
+                                        key=lambda c_ca: c_ca[1],
+                                        reverse=True):
+        left, top, width, height = cv.boundingRect(contour)
+
+        # If contour's bounding box is at far left or right of order sub-image,
+        # it's likely to be above/below the speech balloon, so skip
+        if left == 0 or left + width == order_width:
+            continue
+
+        # If this contour is significantly smaller than the last, it's likely
+        # we're passed from images to individual letters so should stop looping
+        if prev_contour_area and contour_area < prev_contour_area / 2:
+            break
+
+        prev_contour_area = contour_area
+
+        order_item_image = order_image[top:top + height, left:left + width]
+
+        if DISPLAY_SUB_IMAGES:
+            cv.imshow('order_item', order_item_image)
+            cv.waitKey()
+
+        detected_objects_in_order_item = detect_objects_in_image(
+            order_item_image, discard_extreme_angles=True)
+
+        if not detected_objects_in_order_item:
+            continue
+
+        # In some cases single/double burgers can both match a single image so
+        # we take the best match
+        best_match_key = max(
+            detected_objects_in_order_item.keys(),
+            key=lambda k: detected_objects_in_order_item[k].num_good_matches)
+
+        assert best_match_key not in detected_objects, "Detected same object twice in order"
+        detected_objects[best_match_key] = detected_objects_in_order_item[
+            best_match_key]
+
+    return detected_objects
+
+
 def calculate_yaw_pitch_roll_from_homography(homography_matrix):
     """Converts a homography rotation matrix to yaw/pitch/roll angles from
     camera. Useful to discard detections which are angled too far from camera.
@@ -209,11 +286,12 @@ def display_detected_object(query, input_image, good_matches,
     plt.imshow(match_display_img, 'gray'), plt.show()
 
 
-DetectedObject = namedtuple('DetectedObject',
-                            'query, centre_pt, homography_matrix')
+DetectedObject = namedtuple(
+    'DetectedObject', 'query, centre_pt, homography_matrix, num_good_matches')
 
 
-def locate_detected_object(query, input_image, input_keypoints, good_matches):
+def locate_detected_object(query, input_image, input_keypoints, good_matches,
+                           discard_extreme_angles):
     # Useful docs on using and understanding homography
     # https://docs.opencv.org/3.4/d1/de0/tutorial_py_feature_homography.html
     # https://docs.opencv.org/3.4/d9/dab/tutorial_homography.html
@@ -230,30 +308,37 @@ def locate_detected_object(query, input_image, input_keypoints, good_matches):
     if homography_matrix is None:
         return None
 
-    yaw, pitch, roll = calculate_yaw_pitch_roll_from_homography(
-        homography_matrix)
+    if discard_extreme_angles:
+        yaw, pitch, roll = calculate_yaw_pitch_roll_from_homography(
+            homography_matrix)
 
-    # Discard any homography where the image appears to have been reversed or
-    # the angle from the camera is too steep.
-    # The boundary condition should be `abs(angle) > pi/2` but for some reason
-    # the drink was sometimes reporting a "reversed" yaw of 1.9 despite
-    # appearing correct in displayed homographies, so experimentally set to 2
-    if any((abs(angle) > 2 for angle in (yaw, pitch, roll))):
-        if LOG_YAW_PITCH_ROLL:
-            print("Dicard detected object due to yaw/pitch/roll angle")
-        return None
+        # Discard any homography where the image appears to have been reversed
+        # or the angle from the camera is too steep.
+        # The boundary condition should be `abs(angle) > pi/2` but for some
+        # reason the drink was sometimes reporting a "reversed" yaw of 1.9
+        # despite appearing correct in displayed homographies, so
+        # experimentally set to 2
+        if any((abs(angle) > 2 for angle in (yaw, pitch, roll))):
+            if LOG_YAW_PITCH_ROLL:
+                print("Dicard detected object due to yaw/pitch/roll angle")
+
+                if DISPLAY_DETECTED_OBJECTS:
+                    display_detected_object(query, input_image, good_matches,
+                                            input_keypoints, homography_matrix,
+                                            mask)
+            return None
 
     if DISPLAY_DETECTED_OBJECTS:
         display_detected_object(query, input_image, good_matches,
-                                cluster_input_keypoints, homography_matrix,
-                                mask)
+                                input_keypoints, homography_matrix, mask)
 
     centre_pt, = np.average(dst_pts, axis=0)
 
-    return DetectedObject(query, centre_pt, homography_matrix)
+    return DetectedObject(query, centre_pt, homography_matrix,
+                          len(good_matches))
 
 
-def detect_objects_in_image(input_image):
+def detect_objects_in_image(input_image, discard_extreme_angles):
     input_keypoints, input_descriptors = detector.detectAndCompute(
         input_image, None)
 
@@ -275,7 +360,8 @@ def detect_objects_in_image(input_image):
             continue
 
         detected_object = locate_detected_object(query, input_image,
-                                                 input_keypoints, good_matches)
+                                                 input_keypoints, good_matches,
+                                                 discard_extreme_angles)
 
         if detected_object is not None:
             detected_objects[query_name] = detected_object
@@ -304,7 +390,8 @@ def run_test_detect_objects(args):
         input_image = cv.cvtColor(input_image, cv.COLOR_RGB2BGR)
         order_image, till_image = get_order_and_till_sub_images(input_image)
 
-        order_detected_objects = detect_objects_in_image(order_image)
+        order_detected_objects = segment_order_sub_image_and_detect_objects(
+            order_image)
         actual_order = order_detected_objects.keys()
 
         assert expected_order == actual_order, \
@@ -312,7 +399,8 @@ def run_test_detect_objects(args):
             expected {expected_order}
             actual   {actual_order}"""
 
-        till_detected_objects = detect_objects_in_image(till_image)
+        till_detected_objects = detect_objects_in_image(
+            till_image, discard_extreme_angles=False)
         actual_till = till_detected_objects.keys()
 
         expected_till = QUERY_DISPLAY_NAMES.values()
@@ -341,10 +429,12 @@ def run_bot_service(args):
         try:
             order_image, till_image = get_order_and_till_sub_images(input_image)
 
-            till_detected_objects = detect_objects_in_image(till_image)
+            till_detected_objects = detect_objects_in_image(
+                till_image, discard_extreme_angles=False)
             print(f"Till: {till_detected_objects.keys()}")
 
-            order_detected_objects = detect_objects_in_image(order_image)
+            order_detected_objects = segment_order_sub_image_and_detect_objects(
+                order_image)
             print(f"Order: {order_detected_objects.keys()}")
 
             print()
