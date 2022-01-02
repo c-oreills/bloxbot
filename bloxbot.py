@@ -444,11 +444,11 @@ def run_bot_service(args):
 
             till_detected_objects = detect_objects_in_image(
                 till_image, discard_extreme_angles=False)
-            print(f"Till: {till_detected_objects.keys()}")
+            print(f"Till: {tuple(till_detected_objects.keys())}")
 
             order_detected_objects = segment_order_sub_image_and_detect_objects(
                 order_image)
-            print(f"Order: {order_detected_objects.keys()}")
+            print(f"Order: {tuple(order_detected_objects.keys())}")
 
             print()
         except cv.error as e:
