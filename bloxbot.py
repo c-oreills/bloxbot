@@ -172,8 +172,9 @@ def get_order_and_till_sub_images(input_image):
 
     order_bottom = order_top + order_height
 
-    till_white_lower = np.array([0, 0, 170], dtype="uint8")
-    till_white_upper = np.array([0, 0, 240], dtype="uint8")
+    # Till colour matching has been experimentally set to these hsv ranges
+    till_white_lower = np.array([0, 0, 160], dtype="uint8")
+    till_white_upper = np.array([255, 50, 240], dtype="uint8")
 
     # Assume that the till is always under the bottom of the order
     till_left, till_top, till_width, till_height = get_bounding_rect_of_largest_contour(
