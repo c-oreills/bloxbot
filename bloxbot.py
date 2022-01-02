@@ -32,6 +32,10 @@ DISPLAY_SUB_IMAGES_MASK_OPENING = False
 DISPLAY_SUB_IMAGES = False
 DISPLAY_DETECTED_OBJECTS = False
 
+# Stops image detection on right hand half of screen in live service. Useful
+# for displaying debugging without interefering with image detection
+DISCARD_HALF_SCREEN_IN_SERVICE = True
+
 
 def initialise_detector(detector_type):
     assert detector_type in ('sift', 'orb')
@@ -430,6 +434,10 @@ def run_bot_service(args):
         input_image = pyautogui.screenshot()
         input_image = cv.cvtColor(np.array(input_image), cv.COLOR_RGB2BGR)
         cv.imwrite('imgs/screen.png', input_image)
+
+        if DISCARD_HALF_SCREEN_IN_SERVICE:
+            _, input_image_width, _ = input_image.shape
+            input_image = input_image[:, :int(input_image_width / 2)]
 
         try:
             order_image, till_image = get_order_and_till_sub_images(input_image)
