@@ -28,8 +28,15 @@ LOWE_MATCH_RATIO = 0.7
 # including visual displays of detected objects
 LOG_YAW_PITCH_ROLL = False
 LOG_DETECTION_MATCHES = False
-DISPLAY_SUB_IMAGES_MASK_OPENING = False
+
+DISPLAY_SUB_IMAGES_MASK = False
+DISPLAY_SUB_IMAGES_OPENING = False
+DISPLAY_SUB_IMAGES_HSV = False
+
 DISPLAY_SUB_IMAGES = False
+DISPLAY_SUB_IMAGES_ORDER_OPENING = False
+DISPLAY_ORDER_SUB_IMAGES = False
+
 DISPLAY_DETECTED_OBJECTS = False
 
 # Stops image detection on right hand half of screen in live service. Useful
@@ -133,7 +140,7 @@ def get_order_and_till_sub_images(input_image):
 
     white = np.array([0, 0, 255], dtype="uint8")
 
-    def get_bounding_rect_of_largest_contour(hsv_image, hsv_lower, hsv_upper):
+    def get_bounding_rect_of_largest_contour(hsv_image, hsv_lower, hsv_upper, name_prefix):
         mask = cv.inRange(hsv_image, hsv_lower, hsv_upper)
 
         kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
@@ -141,18 +148,24 @@ def get_order_and_till_sub_images(input_image):
 
         contours, _ = cv.findContours(opening, cv.RETR_EXTERNAL,
                                       cv.CHAIN_APPROX_SIMPLE)
-        biggest_contour = max(contours, key=cv.contourArea)
 
-        if DISPLAY_SUB_IMAGES_MASK_OPENING:
-            cv.imshow('hsv_image', hsv_image)
-            cv.imshow('mask', mask)
-            cv.imshow('opening', opening)
+        if DISPLAY_SUB_IMAGES_MASK or DISPLAY_SUB_IMAGES_OPENING or DISPLAY_SUB_IMAGES_HSV:
+            if DISPLAY_SUB_IMAGES_HSV:
+                cv.imshow(f'{name_prefix}_hsv_image', hsv_image)
+            if DISPLAY_SUB_IMAGES_MASK:
+                cv.imshow(f'{name_prefix}_mask', mask)
+            if DISPLAY_SUB_IMAGES_OPENING:
+                cv.imshow(f'{name_prefix}_opening', opening)
             cv.waitKey()
+
+        assert contours, f"No contours found for {name_prefix}"
+
+        biggest_contour = max(contours, key=cv.contourArea)
 
         return cv.boundingRect(biggest_contour)
 
     order_left, order_top, order_width, order_height = get_bounding_rect_of_largest_contour(
-        hsv_image, white, white)
+        hsv_image, white, white, 'order')
 
     order_image = input_image[order_top:order_top + order_height,
                               order_left:order_left + order_width]
@@ -164,7 +177,7 @@ def get_order_and_till_sub_images(input_image):
 
     # Assume that the till is always under the bottom of the order
     till_left, till_top, till_width, till_height = get_bounding_rect_of_largest_contour(
-        hsv_image[order_bottom:, :], till_white_lower, till_white_upper)
+        hsv_image[order_bottom:, :], till_white_lower, till_white_upper, 'till')
 
     till_image = input_image[order_bottom + till_top:order_bottom + till_top +
                              till_height, till_left:till_left + till_width]
@@ -187,8 +200,8 @@ def segment_order_sub_image_and_detect_objects(order_image):
     kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
     opening = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel, iterations=1)
 
-    if DISPLAY_SUB_IMAGES_MASK_OPENING:
-        cv.imshow('opening', opening)
+    if DISPLAY_SUB_IMAGES_ORDER_OPENING:
+        cv.imshow('order_segments_opening', opening)
         cv.waitKey()
 
     contours, _ = cv.findContours(opening, cv.RETR_EXTERNAL,
@@ -220,7 +233,7 @@ def segment_order_sub_image_and_detect_objects(order_image):
 
         order_item_image = order_image[top:top + height, left:left + width]
 
-        if DISPLAY_SUB_IMAGES:
+        if DISPLAY_ORDER_SUB_IMAGES:
             cv.imshow('order_item', order_item_image)
             cv.waitKey()
 
