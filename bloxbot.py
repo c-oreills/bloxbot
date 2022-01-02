@@ -27,6 +27,7 @@ LOWE_MATCH_RATIO = 0.7
 # Logging/display configuration - set to True for more verbose output,
 # including visual displays of detected objects
 LOG_YAW_PITCH_ROLL = False
+LOG_DETECTION_MATCHES = False
 DISPLAY_SUB_IMAGES_MASK_OPENING = False
 DISPLAY_SUB_IMAGES = False
 DISPLAY_DETECTED_OBJECTS = False
@@ -356,7 +357,9 @@ def detect_objects_in_image(input_image, discard_extreme_angles):
 
         good_matches_count = len(good_matches)
         if good_matches_count < MIN_MATCH_COUNT:
-            print(f"{query_name} - No Match")
+            if LOG_DETECTION_MATCHES:
+                print(f"{query_name} - No Match: "
+                      f"{len(good_matches)}/{MIN_MATCH_COUNT}")
             continue
 
         detected_object = locate_detected_object(query, input_image,
@@ -365,11 +368,13 @@ def detect_objects_in_image(input_image, discard_extreme_angles):
 
         if detected_object is not None:
             detected_objects[query_name] = detected_object
-            print(f"{query_name} - Match at {detected_object.centre_pt}: "
-                  f"{len(good_matches)}/{MIN_MATCH_COUNT}")
+            if LOG_DETECTION_MATCHES:
+                print(f"{query_name} - Match at {detected_object.centre_pt}: "
+                      f"{len(good_matches)}/{MIN_MATCH_COUNT}")
         else:
-            print(f"{query_name} - Match, but no/extreme homography: "
-                  f"{len(good_matches)}/{MIN_MATCH_COUNT}")
+            if LOG_DETECTION_MATCHES:
+                print(f"{query_name} - Match, but no/extreme homography: "
+                      f"{len(good_matches)}/{MIN_MATCH_COUNT}")
 
     return detected_objects
 
