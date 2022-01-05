@@ -43,6 +43,9 @@ DISPLAY_DETECTED_OBJECTS = False
 # for displaying debugging without interefering with image detection
 DISCARD_HALF_SCREEN_IN_SERVICE = True
 
+# Allow clicking on (0, 0) - needed given how game client handles the mouse.
+pyautogui.FAILSAFE = False
+
 
 def initialise_detector(detector_type):
     assert detector_type in ('sift', 'orb')
@@ -140,7 +143,8 @@ def get_order_and_till_sub_images(input_image):
 
     white = np.array([0, 0, 255], dtype="uint8")
 
-    def get_bounding_rect_of_largest_contour(hsv_image, hsv_lower, hsv_upper, name_prefix):
+    def get_bounding_rect_of_largest_contour(hsv_image, hsv_lower, hsv_upper,
+                                             name_prefix):
         mask = cv.inRange(hsv_image, hsv_lower, hsv_upper)
 
         kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
@@ -190,7 +194,8 @@ def get_order_and_till_sub_images(input_image):
         cv.imshow('till', till_image)
         cv.waitKey()
 
-    return order_image, till_image
+    return (order_image, order_left, order_top), (till_image, till_left,
+                                                  till_top)
 
 
 def segment_order_sub_image_and_detect_objects(order_image):
@@ -353,7 +358,8 @@ def locate_detected_object(query, input_image, input_keypoints, good_matches,
         display_detected_object(query, input_image, good_matches,
                                 input_keypoints, homography_matrix, mask)
 
-    centre_pt, = np.average(dst_pts, axis=0)
+    masked_dst_pts = dst_pts[mask.astype(bool)]
+    centre_pt = np.average(masked_dst_pts, axis=0)
 
     return DetectedObject(query, centre_pt, homography_matrix,
                           len(good_matches))
@@ -413,7 +419,8 @@ def run_test_detect_objects(args):
         input_image = cv.imread(f'imgs/test/{img_name}.png', 0)
 
         input_image = cv.cvtColor(input_image, cv.COLOR_RGB2BGR)
-        order_image, till_image = get_order_and_till_sub_images(input_image)
+        (order_image, _, _), (till_image, _, _) = \
+            get_order_and_till_sub_images(input_image)
 
         order_detected_objects = segment_order_sub_image_and_detect_objects(
             order_image)
@@ -443,9 +450,34 @@ def run_test_match_written_screenshot(args):
     print(f"Matched {tuple(detected_objects.keys())}")
 
 
+# Need to factor down relative coordinate movements to account for mouse speed.
+# Experimentally set.
+MOUSE_FACTOR_X = 4.3
+MOUSE_FACTOR_Y = 3.6
+
+
 def run_bot_service(args):
+    def move_mouse_abs(x, y):
+        nonlocal mouse_global_offset_x, mouse_global_offset_y
+
+        x -= mouse_global_offset_x
+        y -= mouse_global_offset_y
+
+        mouse_global_offset_x += x
+        mouse_global_offset_y += y
+
+        # Despite moveTo being for absolute coordinates, something internally
+        # in the game client must remap coordinates to 0, 0, so we use moveTo
+        # rather than move for relative movement.
+        pyautogui.moveTo(int(x / MOUSE_FACTOR_X), int(y / MOUSE_FACTOR_Y))
+
     while True:
-        sleep(1)
+        print()
+
+        # Store global mouse offsets so we can return to original position
+        # after each loop
+        mouse_global_offset_x, mouse_global_offset_y = \
+            mouse_original_x, mouse_original_y = pyautogui.position()
 
         input_image = pyautogui.screenshot()
         input_image = cv.cvtColor(np.array(input_image), cv.COLOR_RGB2BGR)
@@ -456,24 +488,65 @@ def run_bot_service(args):
             input_image = input_image[:, :int(input_image_width / 2)]
 
         try:
-            order_image, till_image = get_order_and_till_sub_images(input_image)
+            (order_image, order_left, order_top), \
+                (till_image, till_left, till_top) = \
+                    get_order_and_till_sub_images(input_image)
 
             till_detected_objects = detect_objects_in_image(
                 till_image, discard_extreme_angles=False)
-            print(f"Till: {tuple(till_detected_objects.keys())}")
+            print(f"Till: {' '.join(till_detected_objects.keys())}")
+
+            # Reset view if can't find done button (often due bad camera angle)
+            if ' ✅' not in till_detected_objects:
+                print("Can't find ✅ in till, resetting camera and re-detecting")
+                move_mouse_abs(order_left, till_top)
+                continue
 
             order_detected_objects = segment_order_sub_image_and_detect_objects(
                 order_image)
-            print(f"Order: {tuple(order_detected_objects.keys())}")
+            print(f"Order: {' '.join(order_detected_objects.keys())}")
 
+            order_items = list(order_detected_objects.keys())
+            if not order_items:
+                print("No items in order, resetting camera and re-detecting")
+                move_mouse_abs(order_left, till_top)
+                continue
+
+            order_items.append(' ✅')
+            print("Moving: ", end='')
+
+            for order_item in order_items:
+                # centre_pt is coords within till_image, hence adding left/top
+                till_item_centre_x, till_item_centre_y = \
+                    till_detected_objects[order_item].centre_pt
+                till_item_centre_x += till_left
+                till_item_centre_y += till_top
+
+                print(
+                    f"→ {order_item} ({int(till_item_centre_x)},"
+                    f"{int(till_item_centre_y)}) ",
+                    end='')
+
+                move_mouse_abs(till_item_centre_x, till_item_centre_y)
+                sleep(0.1)
+                # Game client requires clicks to be at (0, 0) or camera spins
+                pyautogui.click(0, 0)
             print()
+
+            # Reset mouse to a sane position to read next order
+            move_mouse_abs(order_left, till_top)
+            # Allow enough time for the next customer to come to counter
+            sleep(2.1)
         except cv.error as e:
             print(f"Skipping Frame: Caught cv.error {e}")
-            continue
+            move_mouse_abs(mouse_original_x, mouse_original_y)
         except Exception as e:
             print(f"Skipping Frame: Caught exception {e}")
             print_exc()
-            continue
+            move_mouse_abs(mouse_original_x, mouse_original_y)
+
+        # Rate limit loop, so that repeated errors don't lock up CPU
+        sleep(0.5)
 
 
 if __name__ == '__main__':
